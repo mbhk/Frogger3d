@@ -2,6 +2,7 @@
 #include "Window.h"
 #include "Renderer.h"
 #include "TextRenderer.h"
+#include "Ground.h"
 #include "Player.h"
 #include "Enemy.h"
 #include <glm/gtc/matrix_transform.hpp>
@@ -13,23 +14,30 @@
 
 namespace {
 
-const float boardLimit = 5.0f;
 const int fieldCount = 15;
 const int startField = fieldCount / 2;
+const int rowCount = 6;
+const int startRow = 0;
+const int goalRow = rowCount - 1;
+const float rowZeroZ = 2.5f;
+const float frogHalfSize = 0.5f;
 const float cameraDistance = 10.0f;
 const float cameraFovY = 45.0f;
 const float hudScale = 2.0f;
 const float hudPadding = 6.0f;
 const float helpPadding = 16.0f;
 const float lineSpacing = 10.0f;
+const float statusScale = 3.0f;
+const float winMessageTime = 2.0f;
+const float hitMessageTime = 1.5f;
 const glm::vec4 textColor(1.0f, 1.0f, 1.0f, 1.0f);
 const glm::vec4 accentColor(1.0f, 0.9f, 0.3f, 1.0f);
 const glm::vec4 dimColor(0.7f, 0.7f, 0.7f, 1.0f);
 const glm::vec4 panelColor(0.0f, 0.0f, 0.0f, 0.7f);
 
 const std::vector<std::string> helpLines = {
-    "W / UP ARROW      MOVE FORWARD",
-    "S / DOWN ARROW    MOVE BACK",
+    "W / UP ARROW      ONE ROW FORWARD",
+    "S / DOWN ARROW    ONE ROW BACK",
     "A / LEFT ARROW    ONE FIELD LEFT",
     "D / RIGHT ARROW   ONE FIELD RIGHT",
     "P                 PAUSE / RESUME",
@@ -37,20 +45,25 @@ const std::vector<std::string> helpLines = {
     "Q                 QUIT",
 };
 
+float rowCenterZ(int row) {
+    return rowZeroZ - static_cast<float>(row);
 }
 
-Game::Game() : isRunning(false), paused(false), showHelp(false), currentField(startField) {
+}
+
+Game::Game() : isRunning(false), paused(false), showHelp(false), currentField(startField), currentRow(startRow), statusTimer(0.0f) {
     window = std::make_unique<Window>(800, 600, "3D Frogger");
     renderer = std::make_unique<Renderer>(window->get());
     textRenderer = std::make_unique<TextRenderer>();
+    ground = std::make_unique<Ground>();
     isRunning = true;
     
-    // Create a simple player in the middle field
-    player = std::make_unique<Player>(fieldCenterX(currentField), 0.0f, 0.0f);
+    // Create the frog on the lower pavement
+    player = std::make_unique<Player>(fieldCenterX(currentField), 0.0f, rowCenterZ(currentRow));
     
-    // Create some enemies
-    enemies.push_back(std::make_unique<Enemy>(2.0f, 0.0f, 0.0f, glm::vec3(0.9f, 0.2f, 0.2f)));
-    enemies.push_back(std::make_unique<Enemy>(-2.0f, 0.0f, 0.0f, glm::vec3(0.2f, 0.5f, 0.9f)));
+    // Create cars in two road lanes
+    enemies.push_back(std::make_unique<Enemy>(2.0f, 0.0f, rowCenterZ(2), glm::vec3(0.9f, 0.2f, 0.2f)));
+    enemies.push_back(std::make_unique<Enemy>(-2.0f, 0.0f, rowCenterZ(4), glm::vec3(0.2f, 0.5f, 0.9f)));
 }
 
 Game::~Game() = default;
@@ -95,11 +108,11 @@ void Game::handleKeyPress(SDL_Keycode key) {
             break;
         case SDLK_w:
         case SDLK_UP:
-            moveInDepth(-1.0f);
+            moveRows(1);
             break;
         case SDLK_s:
         case SDLK_DOWN:
-            moveInDepth(1.0f);
+            moveRows(-1);
             break;
         case SDLK_a:
         case SDLK_LEFT:
@@ -119,16 +132,20 @@ void Game::moveAcrossFields(int step) {
         return;
     }
     currentField = std::clamp(currentField + step, 0, fieldCount - 1);
-    glm::vec3 position = player->getPosition();
-    player->setPosition(fieldCenterX(currentField), position.y, position.z);
+    placeFrog();
 }
 
-void Game::moveInDepth(float dz) {
+void Game::moveRows(int step) {
     if (!player || isPaused()) {
         return;
     }
-    glm::vec3 position = player->getPosition();
-    player->setPosition(position.x, position.y, std::clamp(position.z + dz, -boardLimit, boardLimit));
+    currentRow = std::clamp(currentRow + step, startRow, goalRow);
+    if (currentRow == goalRow) {
+        showStatus("YOU MADE IT!", winMessageTime);
+        resetFrog();
+        return;
+    }
+    placeFrog();
 }
 
 float Game::fieldCenterX(int field) const {
@@ -136,6 +153,41 @@ float Game::fieldCenterX(int field) const {
     const float halfWidth = std::tan(glm::radians(cameraFovY) * 0.5f) * aspect * cameraDistance;
     const float fieldWidth = 2.0f * halfWidth / fieldCount;
     return -halfWidth + (field + 0.5f) * fieldWidth;
+}
+
+void Game::placeFrog() {
+    player->setPosition(fieldCenterX(currentField), 0.0f, rowCenterZ(currentRow));
+}
+
+void Game::resetFrog() {
+    currentField = startField;
+    currentRow = startRow;
+    placeFrog();
+}
+
+void Game::checkCollisions() {
+    if (!player) {
+        return;
+    }
+    const glm::vec3 frog = player->getPosition();
+    for (const auto& enemy : enemies) {
+        if (!enemy) {
+            continue;
+        }
+        const glm::vec3 car = enemy->getPosition();
+        const glm::vec3 carHalf = enemy->getHalfExtents();
+        if (std::abs(frog.x - car.x) < carHalf.x + frogHalfSize &&
+            std::abs(frog.z - car.z) < carHalf.z + frogHalfSize) {
+            showStatus("SPLAT! TRY AGAIN", hitMessageTime);
+            resetFrog();
+            return;
+        }
+    }
+}
+
+void Game::showStatus(const std::string& message, float duration) {
+    statusMessage = message;
+    statusTimer = duration;
 }
 
 bool Game::isPaused() const {
@@ -154,6 +206,12 @@ void Game::update(float deltaTime) {
             enemy->update(deltaTime);
         }
     }
+
+    if (statusTimer > 0.0f) {
+        statusTimer -= deltaTime;
+    }
+
+    checkCollisions();
 }
 
 void Game::render() {
@@ -163,6 +221,9 @@ void Game::render() {
     float aspect = static_cast<float>(window->getWidth()) / static_cast<float>(window->getHeight());
     glm::mat4 projection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
     renderer->setCamera(view, projection);
+
+    // Render pavements and road
+    ground->render(renderer->getShader());
     
     // Render player
     if (player) {
@@ -201,6 +262,15 @@ void Game::renderHUD() {
     const float placementY = height - charHeight - hudPadding - 10.0f;
     textRenderer->drawRect(placementX - hudPadding, placementY - hudPadding, textRenderer->textWidth(placement, hudScale) + 2 * hudPadding, charHeight + 2 * hudPadding, panelColor);
     textRenderer->drawText(placement, placementX, placementY, hudScale, accentColor);
+
+    if (statusTimer > 0.0f && !showHelp) {
+        const float statusHeight = 7.0f * statusScale;
+        const float statusWidth = textRenderer->textWidth(statusMessage, statusScale);
+        const float statusX = (width - statusWidth) / 2.0f;
+        const float statusY = 60.0f;
+        textRenderer->drawRect(statusX - helpPadding, statusY - helpPadding, statusWidth + 2 * helpPadding, statusHeight + 2 * helpPadding, panelColor);
+        textRenderer->drawText(statusMessage, statusX, statusY, statusScale, accentColor);
+    }
 
     if (showHelp) {
         const std::string title = "CONTROLS";

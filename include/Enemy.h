@@ -15,6 +15,7 @@ public:
     void render(const Shader& shader) const;
     void move(float dx, float dy, float dz);
     glm::vec3 getPosition() const;
+    glm::vec3 getHalfExtents() const;
     void setPosition(float x, float y, float z);
 
 private:

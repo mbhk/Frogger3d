@@ -33,6 +33,7 @@ add_executable(Frogger3D
     src/Window.cpp
     src/Shader.cpp
     src/TextRenderer.cpp
+    src/Ground.cpp
 )
 
 # Include directories
