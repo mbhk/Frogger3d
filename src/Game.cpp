@@ -30,6 +30,8 @@ const float lineSpacing = 10.0f;
 const float statusScale = 3.0f;
 const float winMessageTime = 2.0f;
 const float hitMessageTime = 1.5f;
+const int startLevel = 1;
+const int startLives = 3;
 const glm::vec4 textColor(1.0f, 1.0f, 1.0f, 1.0f);
 const glm::vec4 accentColor(1.0f, 0.9f, 0.3f, 1.0f);
 const glm::vec4 dimColor(0.7f, 0.7f, 0.7f, 1.0f);
@@ -42,6 +44,7 @@ const std::vector<std::string> helpLines = {
     "D / RIGHT ARROW   ONE FIELD RIGHT",
     "P                 PAUSE / RESUME",
     "H / ?             TOGGLE HELP",
+    "SPACE             START OVER (GAME OVER)",
     "Q                 QUIT",
 };
 
@@ -51,7 +54,7 @@ float rowCenterZ(int row) {
 
 }
 
-Game::Game() : isRunning(false), paused(false), showHelp(false), currentField(startField), currentRow(startRow), statusTimer(0.0f) {
+Game::Game() : isRunning(false), paused(false), showHelp(false), gameOver(false), currentField(startField), currentRow(startRow), level(startLevel), lives(startLives), statusTimer(0.0f) {
     window = std::make_unique<Window>(800, 600, "3D Frogger");
     renderer = std::make_unique<Renderer>(window->get());
     textRenderer = std::make_unique<TextRenderer>();
@@ -99,6 +102,11 @@ void Game::handleKeyPress(SDL_Keycode key) {
         case SDLK_q:
             isRunning = false;
             break;
+        case SDLK_SPACE:
+            if (gameOver) {
+                restartGame();
+            }
+            break;
         case SDLK_p:
             paused = !paused;
             break;
@@ -127,6 +135,14 @@ void Game::handleKeyPress(SDL_Keycode key) {
     }
 }
 
+void Game::restartGame() {
+    gameOver = false;
+    level = startLevel;
+    lives = startLives;
+    statusTimer = 0.0f;
+    resetFrog();
+}
+
 void Game::moveAcrossFields(int step) {
     if (!player || isPaused()) {
         return;
@@ -141,6 +157,7 @@ void Game::moveRows(int step) {
     }
     currentRow = std::clamp(currentRow + step, startRow, goalRow);
     if (currentRow == goalRow) {
+        level++;
         showStatus("YOU MADE IT!", winMessageTime);
         resetFrog();
         return;
@@ -178,8 +195,14 @@ void Game::checkCollisions() {
         const glm::vec3 carHalf = enemy->getHalfExtents();
         if (std::abs(frog.x - car.x) < carHalf.x + frogHalfSize &&
             std::abs(frog.z - car.z) < carHalf.z + frogHalfSize) {
-            showStatus("SPLAT! TRY AGAIN", hitMessageTime);
-            resetFrog();
+            lives--;
+            if (lives <= 0) {
+                lives = 0;
+                gameOver = true;
+            } else {
+                showStatus("SPLAT! TRY AGAIN", hitMessageTime);
+                resetFrog();
+            }
             return;
         }
     }
@@ -191,7 +214,7 @@ void Game::showStatus(const std::string& message, float duration) {
 }
 
 bool Game::isPaused() const {
-    return paused || showHelp;
+    return paused || showHelp || gameOver;
 }
 
 void Game::update(float deltaTime) {
@@ -263,7 +286,17 @@ void Game::renderHUD() {
     textRenderer->drawRect(placementX - hudPadding, placementY - hudPadding, textRenderer->textWidth(placement, hudScale) + 2 * hudPadding, charHeight + 2 * hudPadding, panelColor);
     textRenderer->drawText(placement, placementX, placementY, hudScale, accentColor);
 
-    if (statusTimer > 0.0f && !showHelp) {
+    const std::string levelText = "LEVEL " + std::to_string(level);
+    const std::string livesText = "LIVES " + std::to_string(lives);
+    const float infoX = hudPadding + 10.0f;
+    const float infoY = 10.0f;
+    const float infoWidth = std::max(textRenderer->textWidth(levelText, hudScale), textRenderer->textWidth(livesText, hudScale));
+    const float infoHeight = 2 * charHeight + lineSpacing;
+    textRenderer->drawRect(infoX - hudPadding, infoY - hudPadding, infoWidth + 2 * hudPadding, infoHeight + 2 * hudPadding, panelColor);
+    textRenderer->drawText(levelText, infoX, infoY, hudScale, accentColor);
+    textRenderer->drawText(livesText, infoX, infoY + charHeight + lineSpacing, hudScale, accentColor);
+
+    if (statusTimer > 0.0f && !showHelp && !gameOver) {
         const float statusHeight = 7.0f * statusScale;
         const float statusWidth = textRenderer->textWidth(statusMessage, statusScale);
         const float statusX = (width - statusWidth) / 2.0f;
@@ -297,6 +330,21 @@ void Game::renderHUD() {
         }
         y += lineHeight;
         textRenderer->drawText(footer, panelX + helpPadding, y, hudScale, dimColor);
+    } else if (gameOver) {
+        const std::string message = "GAME OVER";
+        const std::string hint = "SPACE START OVER OR Q FOR QUIT";
+        const float messageScale = 4.0f;
+        const float messageWidth = textRenderer->textWidth(message, messageScale);
+        const float messageHeight = 7.0f * messageScale;
+        const float hintWidth = textRenderer->textWidth(hint, hudScale);
+        const float boxWidth = std::max(messageWidth, hintWidth) + 2 * helpPadding;
+        const float boxHeight = messageHeight + lineHeight + 2 * helpPadding;
+        const float boxX = (width - boxWidth) / 2.0f;
+        const float boxY = (height - boxHeight) / 2.0f;
+
+        textRenderer->drawRect(boxX, boxY, boxWidth, boxHeight, panelColor);
+        textRenderer->drawText(message, (width - messageWidth) / 2.0f, boxY + helpPadding, messageScale, accentColor);
+        textRenderer->drawText(hint, (width - hintWidth) / 2.0f, boxY + helpPadding + messageHeight + lineSpacing, hudScale, textColor);
     } else if (paused) {
         const std::string message = "PAUSED";
         const float messageScale = 4.0f;

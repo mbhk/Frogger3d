@@ -21,6 +21,7 @@ public:
     void run();
     void handleEvents();
     void handleKeyPress(SDL_Keycode key);
+    void restartGame();
     void moveAcrossFields(int step);
     void moveRows(int step);
     float fieldCenterX(int field) const;
@@ -43,8 +44,11 @@ private:
     bool isRunning;
     bool paused;
     bool showHelp;
+    bool gameOver;
     int currentField;
     int currentRow;
+    int level;
+    int lives;
     std::string statusMessage;
     float statusTimer;
     SDL_Event event;
