@@ -24,6 +24,7 @@ private:
     
     // OpenGL variables
     unsigned int VAO, VBO;
+    int vertexCount;
 };
 
 #endif // PLAYER_H

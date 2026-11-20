@@ -8,10 +8,12 @@ class Shader;
 
 class Enemy {
 public:
-    Enemy(float x, float y, float z, const glm::vec3& bodyColor);
+    Enemy(float x, float y, float z, const glm::vec3& bodyColor, float direction);
     ~Enemy();
 
     void update(float deltaTime);
+    bool isPastExit() const;
+    void setSpeed(float value);
     void render(const Shader& shader) const;
     void move(float dx, float dy, float dz);
     glm::vec3 getPosition() const;

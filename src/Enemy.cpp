@@ -14,9 +14,13 @@ struct CarPart {
 };
 
 const glm::vec3 bodySize(1.6f, 0.5f, 0.9f);
+const float exitLimit = 8.0f;
 
+// Local space: the hood points along +X
 const CarPart carParts[] = {
-    {glm::vec3(-0.1f, 0.45f, 0.0f),  glm::vec3(0.8f, 0.4f, 0.8f),  glm::vec3(0.7f, 0.8f, 0.9f)},  // cabin
+    {glm::vec3(-0.2f, 0.45f, 0.0f),  glm::vec3(0.8f, 0.4f, 0.8f),  glm::vec3(0.7f, 0.8f, 0.9f)},  // cabin
+    {glm::vec3(0.82f, -0.05f, 0.28f),  glm::vec3(0.04f, 0.12f, 0.16f), glm::vec3(1.0f, 0.95f, 0.5f)},  // headlight
+    {glm::vec3(0.82f, -0.05f, -0.28f), glm::vec3(0.04f, 0.12f, 0.16f), glm::vec3(1.0f, 0.95f, 0.5f)},  // headlight
     {glm::vec3(0.5f, -0.25f, 0.5f),  glm::vec3(0.3f, 0.3f, 0.1f),  glm::vec3(0.1f, 0.1f, 0.1f)},  // wheels
     {glm::vec3(-0.5f, -0.25f, 0.5f), glm::vec3(0.3f, 0.3f, 0.1f),  glm::vec3(0.1f, 0.1f, 0.1f)},
     {glm::vec3(0.5f, -0.25f, -0.5f), glm::vec3(0.3f, 0.3f, 0.1f),  glm::vec3(0.1f, 0.1f, 0.1f)},
@@ -25,8 +29,8 @@ const CarPart carParts[] = {
 
 }
 
-Enemy::Enemy(float x, float y, float z, const glm::vec3& bodyColor)
-    : position(x, y, z), velocity(0.0f, 0.0f, 0.0f), speed(3.0f), direction(1.0f), vertexCount(0) {
+Enemy::Enemy(float x, float y, float z, const glm::vec3& bodyColor, float direction)
+    : position(x, y, z), velocity(0.0f, 0.0f, 0.0f), speed(3.0f), direction(direction), vertexCount(0) {
 
     std::vector<float> mesh;
     appendBox(mesh, glm::vec3(0.0f), bodySize, bodyColor);
@@ -58,20 +62,25 @@ Enemy::~Enemy() {
 }
 
 void Enemy::update(float deltaTime) {
-    // Simple AI - move back and forth
+    // Drive along the lane in its direction
     velocity.x = direction * speed;
     
     // Update position
     position += velocity * deltaTime;
-    
-    // Simple boundary checking to reverse direction
-    if (position.x > 5.0f || position.x < -5.0f) {
-        direction *= -1.0f;
-    }
+}
+
+bool Enemy::isPastExit() const {
+    return direction > 0.0f ? position.x > exitLimit : position.x < -exitLimit;
+}
+
+void Enemy::setSpeed(float value) {
+    speed = value;
 }
 
 void Enemy::render(const Shader& shader) const {
+    const float yaw = direction > 0.0f ? 0.0f : glm::radians(180.0f);
     glm::mat4 model = glm::translate(glm::mat4(1.0f), position);
+    model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
     shader.setMat4("uModel", model);
 
     glBindVertexArray(VAO);

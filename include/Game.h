@@ -3,6 +3,7 @@
 
 #include <SDL2/SDL.h>
 #include <memory>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -13,6 +14,13 @@ class Ground;
 class Player;
 class Enemy;
 
+struct TrafficLane {
+    int row;
+    float direction;
+    int speedStep;
+    std::vector<std::unique_ptr<Enemy>> cars;
+};
+
 class Game {
 public:
     Game();
@@ -22,6 +30,10 @@ public:
     void handleEvents();
     void handleKeyPress(SDL_Keycode key);
     void restartGame();
+    void spawnCar(TrafficLane& lane, float x);
+    void applyCarSpeed();
+    void speedUpRandomLane();
+    void updateTraffic(float deltaTime);
     void moveAcrossFields(int step);
     void moveRows(int step);
     float fieldCenterX(int field) const;
@@ -40,7 +52,7 @@ private:
     std::unique_ptr<TextRenderer> textRenderer;
     std::unique_ptr<Ground> ground;
     std::unique_ptr<Player> player;
-    std::vector<std::unique_ptr<Enemy>> enemies;
+    std::vector<TrafficLane> lanes;
     bool isRunning;
     bool paused;
     bool showHelp;
@@ -51,6 +63,9 @@ private:
     int lives;
     std::string statusMessage;
     float statusTimer;
+    float respawnTimer;
+    int carLimit;
+    std::mt19937 randomEngine;
     SDL_Event event;
 };
 

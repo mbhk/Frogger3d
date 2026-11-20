@@ -10,6 +10,7 @@
 #include <cmath>
 #include <iostream>
 #include <memory>
+#include <random>
 #include <chrono>
 
 namespace {
@@ -32,6 +33,15 @@ const float winMessageTime = 2.0f;
 const float hitMessageTime = 1.5f;
 const int startLevel = 1;
 const int startLives = 3;
+const float carSpawnX = 8.5f;
+const float minSpawnGap = 2.5f;
+const float respawnMinTime = 0.3f;
+const float respawnMaxTime = 1.0f;
+const float baseCarSpeed = 3.0f;
+const float carSpeedPerStep = 0.6f;
+const int maxSpeedStepDifference = 3;
+const int levelsPerExtraCar = 4;
+const int startCarLimit = 1;
 const glm::vec4 textColor(1.0f, 1.0f, 1.0f, 1.0f);
 const glm::vec4 accentColor(1.0f, 0.9f, 0.3f, 1.0f);
 const glm::vec4 dimColor(0.7f, 0.7f, 0.7f, 1.0f);
@@ -52,9 +62,51 @@ float rowCenterZ(int row) {
     return rowZeroZ - static_cast<float>(row);
 }
 
+// Even road lanes drive right to left, odd road lanes drive left to right
+float laneDirection(int row) {
+    return row % 2 == 0 ? -1.0f : 1.0f;
 }
 
-Game::Game() : isRunning(false), paused(false), showHelp(false), gameOver(false), currentField(startField), currentRow(startRow), level(startLevel), lives(startLives), statusTimer(0.0f) {
+float carSpeed(const TrafficLane& lane) {
+    return baseCarSpeed + carSpeedPerStep * static_cast<float>(lane.speedStep);
+}
+
+// True if no car in the lane is close enough to the entry point to collide with a newly spawned car
+bool isEntryClear(const TrafficLane& lane, float entryX) {
+    for (const auto& car : lane.cars) {
+        if (std::abs(car->getPosition().x - entryX) < minSpawnGap) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// True if raising the lane at index by one step keeps all lanes within maxSpeedStepDifference
+bool canIncreaseStep(const std::vector<TrafficLane>& lanes, std::size_t index) {
+    int lowest = lanes[index].speedStep + 1;
+    int highest = lowest;
+    for (std::size_t i = 0; i < lanes.size(); ++i) {
+        if (i != index) {
+            lowest = std::min(lowest, lanes[i].speedStep);
+            highest = std::max(highest, lanes[i].speedStep);
+        }
+    }
+    return highest - lowest <= maxSpeedStepDifference;
+}
+
+float randomBetween(std::mt19937& engine, float low, float high) {
+    std::uniform_real_distribution<float> distribution(low, high);
+    return distribution(engine);
+}
+
+std::size_t randomIndex(std::mt19937& engine, std::size_t count) {
+    std::uniform_int_distribution<std::size_t> distribution(0, count - 1);
+    return distribution(engine);
+}
+
+}
+
+Game::Game() : isRunning(false), paused(false), showHelp(false), gameOver(false), currentField(startField), currentRow(startRow), level(startLevel), lives(startLives), statusTimer(0.0f), respawnTimer(0.0f), carLimit(startCarLimit), randomEngine(std::random_device{}()) {
     window = std::make_unique<Window>(800, 600, "3D Frogger");
     renderer = std::make_unique<Renderer>(window->get());
     textRenderer = std::make_unique<TextRenderer>();
@@ -64,9 +116,84 @@ Game::Game() : isRunning(false), paused(false), showHelp(false), gameOver(false)
     // Create the frog on the lower pavement
     player = std::make_unique<Player>(fieldCenterX(currentField), 0.0f, rowCenterZ(currentRow));
     
-    // Create cars in two road lanes
-    enemies.push_back(std::make_unique<Enemy>(2.0f, 0.0f, rowCenterZ(2), glm::vec3(0.9f, 0.2f, 0.2f)));
-    enemies.push_back(std::make_unique<Enemy>(-2.0f, 0.0f, rowCenterZ(4), glm::vec3(0.2f, 0.5f, 0.9f)));
+    // One traffic lane per road row; the first car starts after the first respawn delay
+    for (int row = 1; row < goalRow; ++row) {
+        lanes.push_back({row, laneDirection(row), 0, {}});
+    }
+}
+
+void Game::spawnCar(TrafficLane& lane, float x) {
+    const glm::vec3 color(
+        randomBetween(randomEngine, 0.2f, 1.0f),
+        randomBetween(randomEngine, 0.2f, 1.0f),
+        randomBetween(randomEngine, 0.2f, 1.0f));
+    lane.cars.push_back(std::make_unique<Enemy>(x, 0.0f, rowCenterZ(lane.row), color, lane.direction));
+    lane.cars.back()->setSpeed(carSpeed(lane));
+}
+
+void Game::applyCarSpeed() {
+    for (auto& lane : lanes) {
+        for (auto& car : lane.cars) {
+            car->setSpeed(carSpeed(lane));
+        }
+    }
+}
+
+void Game::speedUpRandomLane() {
+    std::size_t chosen = randomIndex(randomEngine, lanes.size());
+    if (!canIncreaseStep(lanes, chosen)) {
+        std::vector<std::size_t> candidates;
+        for (std::size_t i = 0; i < lanes.size(); ++i) {
+            if (canIncreaseStep(lanes, i)) {
+                candidates.push_back(i);
+            }
+        }
+        chosen = candidates[randomIndex(randomEngine, candidates.size())];
+    }
+    lanes[chosen].speedStep++;
+}
+
+void Game::updateTraffic(float deltaTime) {
+    for (auto& lane : lanes) {
+        for (auto& car : lane.cars) {
+            car->update(deltaTime);
+        }
+
+        const std::size_t carsBefore = lane.cars.size();
+        lane.cars.erase(std::remove_if(lane.cars.begin(), lane.cars.end(), [](const std::unique_ptr<Enemy>& car) {
+            return car->isPastExit();
+        }), lane.cars.end());
+        if (lane.cars.size() != carsBefore) {
+            respawnTimer = randomBetween(randomEngine, respawnMinTime, respawnMaxTime);
+        }
+    }
+
+    int carsOnRoad = 0;
+    for (const auto& lane : lanes) {
+        carsOnRoad += static_cast<int>(lane.cars.size());
+    }
+    if (carsOnRoad >= carLimit) {
+        return;
+    }
+
+    respawnTimer -= deltaTime;
+    if (respawnTimer > 0.0f) {
+        return;
+    }
+
+    std::vector<std::size_t> freeLanes;
+    for (std::size_t i = 0; i < lanes.size(); ++i) {
+        if (isEntryClear(lanes[i], -lanes[i].direction * carSpawnX)) {
+            freeLanes.push_back(i);
+        }
+    }
+    if (freeLanes.empty()) {
+        return;
+    }
+
+    TrafficLane& lane = lanes[freeLanes[randomIndex(randomEngine, freeLanes.size())]];
+    spawnCar(lane, -lane.direction * carSpawnX);
+    respawnTimer = randomBetween(randomEngine, respawnMinTime, respawnMaxTime);
 }
 
 Game::~Game() = default;
@@ -140,6 +267,13 @@ void Game::restartGame() {
     level = startLevel;
     lives = startLives;
     statusTimer = 0.0f;
+    for (auto& lane : lanes) {
+        lane.speedStep = 0;
+        lane.cars.clear();
+    }
+    carLimit = startCarLimit;
+    respawnTimer = 0.0f;
+    applyCarSpeed();
     resetFrog();
 }
 
@@ -158,6 +292,12 @@ void Game::moveRows(int step) {
     currentRow = std::clamp(currentRow + step, startRow, goalRow);
     if (currentRow == goalRow) {
         level++;
+        if ((level - startLevel) % levelsPerExtraCar == 0) {
+            carLimit++;
+        } else {
+            speedUpRandomLane();
+        }
+        applyCarSpeed();
         showStatus("YOU MADE IT!", winMessageTime);
         resetFrog();
         return;
@@ -187,23 +327,22 @@ void Game::checkCollisions() {
         return;
     }
     const glm::vec3 frog = player->getPosition();
-    for (const auto& enemy : enemies) {
-        if (!enemy) {
-            continue;
-        }
-        const glm::vec3 car = enemy->getPosition();
-        const glm::vec3 carHalf = enemy->getHalfExtents();
-        if (std::abs(frog.x - car.x) < carHalf.x + frogHalfSize &&
-            std::abs(frog.z - car.z) < carHalf.z + frogHalfSize) {
-            lives--;
-            if (lives <= 0) {
-                lives = 0;
-                gameOver = true;
-            } else {
-                showStatus("SPLAT! TRY AGAIN", hitMessageTime);
-                resetFrog();
+    for (const auto& lane : lanes) {
+        for (const auto& enemy : lane.cars) {
+            const glm::vec3 car = enemy->getPosition();
+            const glm::vec3 carHalf = enemy->getHalfExtents();
+            if (std::abs(frog.x - car.x) < carHalf.x + frogHalfSize &&
+                std::abs(frog.z - car.z) < carHalf.z + frogHalfSize) {
+                lives--;
+                if (lives <= 0) {
+                    lives = 0;
+                    gameOver = true;
+                } else {
+                    showStatus("SPLAT! TRY AGAIN", hitMessageTime);
+                    resetFrog();
+                }
+                return;
             }
-            return;
         }
     }
 }
@@ -223,12 +362,7 @@ void Game::update(float deltaTime) {
         player->update(deltaTime);
     }
     
-    // Update enemies
-    for (auto& enemy : enemies) {
-        if (enemy) {
-            enemy->update(deltaTime);
-        }
-    }
+    updateTraffic(deltaTime);
 
     if (statusTimer > 0.0f) {
         statusTimer -= deltaTime;
@@ -253,10 +387,10 @@ void Game::render() {
         player->render(renderer->getShader());
     }
     
-    // Render enemies
-    for (auto& enemy : enemies) {
-        if (enemy) {
-            enemy->render(renderer->getShader());
+    // Render cars
+    for (auto& lane : lanes) {
+        for (auto& car : lane.cars) {
+            car->render(renderer->getShader());
         }
     }
 
