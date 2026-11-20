@@ -8,7 +8,7 @@ class Shader;
 
 class Enemy {
 public:
-    Enemy(float x, float y, float z);
+    Enemy(float x, float y, float z, const glm::vec3& bodyColor);
     ~Enemy();
 
     void update(float deltaTime);
@@ -24,7 +24,8 @@ private:
     float direction;
 
     // OpenGL variables
-    unsigned int VAO, VBO, EBO;
+    unsigned int VAO, VBO;
+    int vertexCount;
 };
 
 #endif // ENEMY_H

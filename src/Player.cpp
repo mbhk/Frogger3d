@@ -1,5 +1,5 @@
 #include "Player.h"
-#include "CubeData.h"
+#include "FrogData.h"
 #include "Shader.h"
 #include <GL/glew.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -10,15 +10,11 @@ Player::Player(float x, float y, float z)
     // Initialize OpenGL buffers
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
     
     glBindVertexArray(VAO);
     
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
-    
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), cubeIndices, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(frogVertices), frogVertices, GL_STATIC_DRAW);
     
     // Position attribute
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
@@ -34,7 +30,6 @@ Player::Player(float x, float y, float z)
 Player::~Player() {
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
-    glDeleteBuffers(1, &EBO);
 }
 
 void Player::update(float deltaTime) {
@@ -50,7 +45,7 @@ void Player::render(const Shader& shader) const {
     shader.setMat4("uModel", model);
 
     glBindVertexArray(VAO);
-    glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+    glDrawArrays(GL_TRIANGLES, 0, 12);
     glBindVertexArray(0);
 }
 

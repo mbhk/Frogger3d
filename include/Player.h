@@ -23,7 +23,7 @@ private:
     float speed;
     
     // OpenGL variables
-    unsigned int VAO, VBO, EBO;
+    unsigned int VAO, VBO;
 };
 
 #endif // PLAYER_H

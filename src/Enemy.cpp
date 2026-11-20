@@ -1,23 +1,74 @@
 #include "Enemy.h"
-#include "CubeData.h"
 #include "Shader.h"
 #include <GL/glew.h>
 #include <glm/gtc/matrix_transform.hpp>
+#include <vector>
 
-Enemy::Enemy(float x, float y, float z) 
-    : position(x, y, z), velocity(0.0f, 0.0f, 0.0f), speed(3.0f), direction(1.0f) {
+namespace {
+
+struct CarPart {
+    glm::vec3 center;
+    glm::vec3 size;
+    glm::vec3 color;
+};
+
+const glm::vec3 bodySize(1.6f, 0.5f, 0.9f);
+
+const CarPart carParts[] = {
+    {glm::vec3(-0.1f, 0.45f, 0.0f),  glm::vec3(0.8f, 0.4f, 0.8f),  glm::vec3(0.7f, 0.8f, 0.9f)},  // cabin
+    {glm::vec3(0.5f, -0.25f, 0.5f),  glm::vec3(0.3f, 0.3f, 0.1f),  glm::vec3(0.1f, 0.1f, 0.1f)},  // wheels
+    {glm::vec3(-0.5f, -0.25f, 0.5f), glm::vec3(0.3f, 0.3f, 0.1f),  glm::vec3(0.1f, 0.1f, 0.1f)},
+    {glm::vec3(0.5f, -0.25f, -0.5f), glm::vec3(0.3f, 0.3f, 0.1f),  glm::vec3(0.1f, 0.1f, 0.1f)},
+    {glm::vec3(-0.5f, -0.25f, -0.5f), glm::vec3(0.3f, 0.3f, 0.1f), glm::vec3(0.1f, 0.1f, 0.1f)},
+};
+
+void appendBox(std::vector<float>& out, const glm::vec3& center, const glm::vec3& size, const glm::vec3& color) {
+    const glm::vec3 h = size * 0.5f;
+    const glm::vec3 corners[8] = {
+        center + glm::vec3(-h.x, -h.y, -h.z),
+        center + glm::vec3( h.x, -h.y, -h.z),
+        center + glm::vec3( h.x,  h.y, -h.z),
+        center + glm::vec3(-h.x,  h.y, -h.z),
+        center + glm::vec3(-h.x, -h.y,  h.z),
+        center + glm::vec3( h.x, -h.y,  h.z),
+        center + glm::vec3( h.x,  h.y,  h.z),
+        center + glm::vec3(-h.x,  h.y,  h.z),
+    };
+    const int triangles[12][3] = {
+        {4, 5, 6}, {4, 6, 7},  // front
+        {1, 0, 3}, {1, 3, 2},  // back
+        {5, 1, 2}, {5, 2, 6},  // right
+        {0, 4, 7}, {0, 7, 3},  // left
+        {7, 6, 2}, {7, 2, 3},  // top
+        {0, 1, 5}, {0, 5, 4},  // bottom
+    };
+    for (const auto& triangle : triangles) {
+        for (int index : triangle) {
+            const glm::vec3& p = corners[index];
+            out.insert(out.end(), {p.x, p.y, p.z, color.r, color.g, color.b});
+        }
+    }
+}
+
+}
+
+Enemy::Enemy(float x, float y, float z, const glm::vec3& bodyColor)
+    : position(x, y, z), velocity(0.0f, 0.0f, 0.0f), speed(3.0f), direction(1.0f), vertexCount(0) {
+
+    std::vector<float> mesh;
+    appendBox(mesh, glm::vec3(0.0f), bodySize, bodyColor);
+    for (const auto& part : carParts) {
+        appendBox(mesh, part.center, part.size, part.color);
+    }
+    vertexCount = static_cast<int>(mesh.size() / 6);
 
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
 
     glBindVertexArray(VAO);
 
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), cubeIndices, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, mesh.size() * sizeof(float), mesh.data(), GL_STATIC_DRAW);
 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
@@ -31,7 +82,6 @@ Enemy::Enemy(float x, float y, float z)
 Enemy::~Enemy() {
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
-    glDeleteBuffers(1, &EBO);
 }
 
 void Enemy::update(float deltaTime) {
@@ -52,7 +102,7 @@ void Enemy::render(const Shader& shader) const {
     shader.setMat4("uModel", model);
 
     glBindVertexArray(VAO);
-    glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+    glDrawArrays(GL_TRIANGLES, 0, vertexCount);
     glBindVertexArray(0);
 }
 
