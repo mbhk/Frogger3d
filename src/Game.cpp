@@ -3,13 +3,14 @@
 #include "Renderer.h"
 #include "Player.h"
 #include "Enemy.h"
+#include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 #include <memory>
 #include <chrono>
 
 Game::Game() : isRunning(false) {
     window = std::make_unique<Window>(800, 600, "3D Frogger");
-    renderer = std::make_unique<Renderer>(800, 600);
+    renderer = std::make_unique<Renderer>(window->get());
     isRunning = true;
     
     // Create a simple player
@@ -60,16 +61,21 @@ void Game::update(float deltaTime) {
 
 void Game::render() {
     renderer->clear();
+
+    glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 6.0f, 8.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    float aspect = static_cast<float>(window->getWidth()) / static_cast<float>(window->getHeight());
+    glm::mat4 projection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
+    renderer->setCamera(view, projection);
     
     // Render player
     if (player) {
-        player->render();
+        player->render(renderer->getShader());
     }
     
     // Render enemies
     for (auto& enemy : enemies) {
         if (enemy) {
-            enemy->render();
+            enemy->render(renderer->getShader());
         }
     }
     

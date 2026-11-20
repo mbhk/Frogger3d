@@ -6,18 +6,25 @@
 #include <glm/glm.hpp>
 #include <memory>
 
+class Window;
+class Shader;
+
 class Renderer {
 public:
-    Renderer(int width, int height);
+    Renderer(SDL_Window* window);
     ~Renderer();
 
     void clear() const;
     void swap() const;
     void setViewport(int width, int height) const;
     void setClearColor(float r, float g, float b, float a) const;
+    void setCamera(const glm::mat4& view, const glm::mat4& projection) const;
+    const Shader& getShader() const;
 
 private:
-    std::unique_ptr<SDL_GLContext, decltype(&SDL_GL_DeleteContext)> context;
+    SDL_Window* window;
+    SDL_GLContext context;
+    std::unique_ptr<Shader> shader;
     int width;
     int height;
 };
