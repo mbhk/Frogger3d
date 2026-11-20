@@ -72,9 +72,15 @@ void Player::render(const Shader& shader) const {
     model = glm::rotate(model, frontYaw, glm::vec3(0.0f, 1.0f, 0.0f));
     shader.setMat4("uModel", model);
 
+    // Glossy skin: the frog catches light highlights
+    shader.setFloat("uSpecularStrength", 0.8f);
+    shader.setFloat("uShininess", 32.0f);
+
     glBindVertexArray(VAO);
     glDrawArrays(GL_TRIANGLES, 0, vertexCount);
     glBindVertexArray(0);
+
+    shader.setFloat("uSpecularStrength", 0.0f);
 }
 
 void Player::move(float dx, float dy, float dz) {

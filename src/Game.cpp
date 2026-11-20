@@ -3,8 +3,11 @@
 #include "Renderer.h"
 #include "TextRenderer.h"
 #include "Ground.h"
+#include "Lamp.h"
+#include "Light.h"
 #include "Player.h"
 #include "Enemy.h"
+#include "Shader.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <cmath>
@@ -46,6 +49,14 @@ const glm::vec4 textColor(1.0f, 1.0f, 1.0f, 1.0f);
 const glm::vec4 accentColor(1.0f, 0.9f, 0.3f, 1.0f);
 const glm::vec4 dimColor(0.7f, 0.7f, 0.7f, 1.0f);
 const glm::vec4 panelColor(0.0f, 0.0f, 0.0f, 0.7f);
+const glm::vec3 cameraPosition(0.0f, 6.0f, 8.0f);
+const float lampOffsetsX[] = {-4.0f, 4.0f};
+const glm::vec3 dayAmbientColor(0.35f, 0.35f, 0.35f);
+const glm::vec3 daySunColor(0.7f, 0.68f, 0.6f);
+const glm::vec3 nightAmbientColor(0.08f, 0.08f, 0.14f);
+const glm::vec3 nightSunColor(0.0f, 0.0f, 0.0f);
+const glm::vec3 sunDirection = glm::normalize(glm::vec3(0.3f, 1.0f, 0.5f));
+const std::size_t maxLights = 32;
 
 const std::vector<std::string> helpLines = {
     "W / UP ARROW      ONE ROW FORWARD",
@@ -53,6 +64,7 @@ const std::vector<std::string> helpLines = {
     "A / LEFT ARROW    ONE FIELD LEFT",
     "D / RIGHT ARROW   ONE FIELD RIGHT",
     "P                 PAUSE / RESUME",
+    "N                 TOGGLE DAY / NIGHT",
     "H / ?             TOGGLE HELP",
     "SPACE             START OVER (GAME OVER)",
     "Q                 QUIT",
@@ -106,11 +118,18 @@ std::size_t randomIndex(std::mt19937& engine, std::size_t count) {
 
 }
 
-Game::Game() : isRunning(false), paused(false), showHelp(false), gameOver(false), currentField(startField), currentRow(startRow), level(startLevel), lives(startLives), statusTimer(0.0f), respawnTimer(0.0f), carLimit(startCarLimit), randomEngine(std::random_device{}()) {
+Game::Game() : isRunning(false), paused(false), showHelp(false), gameOver(false), currentField(startField), currentRow(startRow), level(startLevel), lives(startLives), statusTimer(0.0f), respawnTimer(0.0f), carLimit(startCarLimit), nightTime(false), randomEngine(std::random_device{}()) {
     window = std::make_unique<Window>(800, 600, "3D Frogger");
     renderer = std::make_unique<Renderer>(window->get());
     textRenderer = std::make_unique<TextRenderer>();
     ground = std::make_unique<Ground>();
+
+    // Two lamps on each pavement, slightly shifted from each other
+    for (int row : {startRow, goalRow}) {
+        for (float offsetX : lampOffsetsX) {
+            lamps.push_back(std::make_unique<Lamp>(glm::vec3(offsetX, 0.0f, rowCenterZ(row))));
+        }
+    }
     isRunning = true;
     
     // Create the frog on the lower pavement
@@ -236,6 +255,9 @@ void Game::handleKeyPress(SDL_Keycode key) {
             break;
         case SDLK_p:
             paused = !paused;
+            break;
+        case SDLK_n:
+            nightTime = !nightTime;
             break;
         case SDLK_h:
         case SDLK_QUESTION:
@@ -379,8 +401,37 @@ void Game::render() {
     glm::mat4 projection = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
     renderer->setCamera(view, projection);
 
+    std::vector<PointLight> lights;
+    if (nightTime) {
+        for (const auto& lamp : lamps) {
+            lights.push_back(lamp->getLight());
+        }
+        for (const auto& lane : lanes) {
+            for (const auto& car : lane.cars) {
+                const std::vector<PointLight> carLights = car->getLights();
+                lights.insert(lights.end(), carLights.begin(), carLights.end());
+            }
+        }
+    }
+
+    const Shader& shader = renderer->getShader();
+    shader.setVec3("uViewPos", cameraPosition);
+    shader.setVec3("uAmbientColor", nightTime ? nightAmbientColor : dayAmbientColor);
+    shader.setVec3("uSunDirection", sunDirection);
+    shader.setVec3("uSunColor", nightTime ? nightSunColor : daySunColor);
+    const std::size_t lightCount = std::min(lights.size(), maxLights);
+    shader.setInt("uLightCount", static_cast<int>(lightCount));
+    for (std::size_t i = 0; i < lightCount; ++i) {
+        shader.setVec3("uLightPos[" + std::to_string(i) + "]", lights[i].position);
+        shader.setVec3("uLightColor[" + std::to_string(i) + "]", lights[i].color);
+    }
+
     // Render pavements and road
-    ground->render(renderer->getShader());
+    ground->render(shader);
+
+    for (auto& lamp : lamps) {
+        lamp->render(shader);
+    }
     
     // Render player
     if (player) {

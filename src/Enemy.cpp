@@ -15,16 +15,32 @@ struct CarPart {
 
 const glm::vec3 bodySize(1.6f, 0.5f, 0.9f);
 const float exitLimit = 8.0f;
+const glm::vec3 headlightColor(1.0f, 0.95f, 0.6f);
+const glm::vec3 taillightColor(0.9f, 0.05f, 0.05f);
 
 // Local space: the hood points along +X
 const CarPart carParts[] = {
     {glm::vec3(-0.2f, 0.45f, 0.0f),  glm::vec3(0.8f, 0.4f, 0.8f),  glm::vec3(0.7f, 0.8f, 0.9f)},  // cabin
-    {glm::vec3(0.82f, -0.05f, 0.28f),  glm::vec3(0.04f, 0.12f, 0.16f), glm::vec3(1.0f, 0.95f, 0.5f)},  // headlight
-    {glm::vec3(0.82f, -0.05f, -0.28f), glm::vec3(0.04f, 0.12f, 0.16f), glm::vec3(1.0f, 0.95f, 0.5f)},  // headlight
+    {glm::vec3(0.82f, -0.05f, 0.28f),  glm::vec3(0.04f, 0.12f, 0.16f), headlightColor},  // headlight
+    {glm::vec3(0.82f, -0.05f, -0.28f), glm::vec3(0.04f, 0.12f, 0.16f), headlightColor},  // headlight
+    {glm::vec3(-0.82f, -0.05f, 0.28f), glm::vec3(0.04f, 0.12f, 0.16f), taillightColor},  // taillight
+    {glm::vec3(-0.82f, -0.05f, -0.28f), glm::vec3(0.04f, 0.12f, 0.16f), taillightColor},  // taillight
     {glm::vec3(0.5f, -0.25f, 0.5f),  glm::vec3(0.3f, 0.3f, 0.1f),  glm::vec3(0.1f, 0.1f, 0.1f)},  // wheels
     {glm::vec3(-0.5f, -0.25f, 0.5f), glm::vec3(0.3f, 0.3f, 0.1f),  glm::vec3(0.1f, 0.1f, 0.1f)},
     {glm::vec3(0.5f, -0.25f, -0.5f), glm::vec3(0.3f, 0.3f, 0.1f),  glm::vec3(0.1f, 0.1f, 0.1f)},
     {glm::vec3(-0.5f, -0.25f, -0.5f), glm::vec3(0.3f, 0.3f, 0.1f), glm::vec3(0.1f, 0.1f, 0.1f)},
+};
+
+struct CarLight {
+    glm::vec3 center;
+    glm::vec3 color;
+};
+
+const CarLight carLights[] = {
+    {glm::vec3(0.82f, -0.05f, 0.28f), headlightColor},
+    {glm::vec3(0.82f, -0.05f, -0.28f), headlightColor},
+    {glm::vec3(-0.82f, -0.05f, 0.28f), taillightColor},
+    {glm::vec3(-0.82f, -0.05f, -0.28f), taillightColor},
 };
 
 }
@@ -78,14 +94,26 @@ void Enemy::setSpeed(float value) {
 }
 
 void Enemy::render(const Shader& shader) const {
-    const float yaw = direction > 0.0f ? 0.0f : glm::radians(180.0f);
-    glm::mat4 model = glm::translate(glm::mat4(1.0f), position);
-    model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
-    shader.setMat4("uModel", model);
+    shader.setMat4("uModel", modelMatrix());
 
     glBindVertexArray(VAO);
     glDrawArrays(GL_TRIANGLES, 0, vertexCount);
     glBindVertexArray(0);
+}
+
+std::vector<PointLight> Enemy::getLights() const {
+    const glm::mat4 model = modelMatrix();
+    std::vector<PointLight> lights;
+    for (const auto& light : carLights) {
+        lights.push_back({glm::vec3(model * glm::vec4(light.center, 1.0f)), light.color});
+    }
+    return lights;
+}
+
+glm::mat4 Enemy::modelMatrix() const {
+    const float yaw = direction > 0.0f ? 0.0f : glm::radians(180.0f);
+    glm::mat4 model = glm::translate(glm::mat4(1.0f), position);
+    return glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
 }
 
 void Enemy::move(float dx, float dy, float dz) {

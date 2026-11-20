@@ -1,8 +1,10 @@
 #ifndef ENEMY_H
 #define ENEMY_H
 
+#include "Light.h"
 #include <glm/glm.hpp>
 #include <memory>
+#include <vector>
 
 class Shader;
 
@@ -19,8 +21,11 @@ public:
     glm::vec3 getPosition() const;
     glm::vec3 getHalfExtents() const;
     void setPosition(float x, float y, float z);
+    std::vector<PointLight> getLights() const;
 
 private:
+    glm::mat4 modelMatrix() const;
+
     glm::vec3 position;
     glm::vec3 velocity;
     float speed;

@@ -13,20 +13,61 @@ uniform mat4 uView;
 uniform mat4 uProjection;
 
 out vec3 vColor;
+out vec3 vPosition;
 
 void main() {
     gl_Position = uProjection * uView * uModel * vec4(aPos, 1.0);
     vColor = aColor;
+    vPosition = vec3(uModel * vec4(aPos, 1.0));
 }
 )";
 
 static const char* fragmentShaderSource = R"(
 #version 330 core
 in vec3 vColor;
+in vec3 vPosition;
 out vec4 FragColor;
 
+uniform vec3 uViewPos;
+uniform vec3 uLightPos[32];
+uniform vec3 uLightColor[32];
+uniform int uLightCount;
+uniform bool uEmissive;
+uniform float uSpecularStrength;
+uniform float uShininess;
+uniform vec3 uAmbientColor;
+uniform vec3 uSunDirection;
+uniform vec3 uSunColor;
+
 void main() {
-    FragColor = vec4(vColor, 1.0);
+    if (uEmissive) {
+        FragColor = vec4(vColor, 1.0);
+        return;
+    }
+
+    // Faces are flat-shaded: the normal comes from the triangle's screen-space derivatives
+    vec3 norm = normalize(cross(dFdx(vPosition), dFdy(vPosition)));
+    if (dot(norm, normalize(uViewPos - vPosition)) < 0.0) {
+        norm = -norm;
+    }
+
+    vec3 viewDir = normalize(uViewPos - vPosition);
+    vec3 lighting = uAmbientColor + max(dot(norm, uSunDirection), 0.0) * uSunColor;
+    vec3 specular = vec3(0.0);
+    for (int i = 0; i < uLightCount; ++i) {
+        vec3 toLight = uLightPos[i] - vPosition;
+        float dist = length(toLight);
+        vec3 lightDir = toLight / dist;
+        float attenuation = 1.0 / (1.0 + 0.2 * dist + 0.1 * dist * dist);
+        float diff = max(dot(norm, lightDir), 0.0);
+        lighting += diff * attenuation * uLightColor[i] * 2.5;
+
+        vec3 halfway = normalize(lightDir + viewDir);
+        float spec = pow(max(dot(norm, halfway), 0.0), uShininess);
+        specular += spec * attenuation * uLightColor[i] * uSpecularStrength * 2.5;
+    }
+
+    FragColor = vec4(lighting * vColor + specular, 1.0);
 }
 )";
 

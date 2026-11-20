@@ -11,6 +11,7 @@ class Window;
 class Renderer;
 class TextRenderer;
 class Ground;
+class Lamp;
 class Player;
 class Enemy;
 
@@ -51,12 +52,14 @@ private:
     std::unique_ptr<Renderer> renderer;
     std::unique_ptr<TextRenderer> textRenderer;
     std::unique_ptr<Ground> ground;
+    std::vector<std::unique_ptr<Lamp>> lamps;
     std::unique_ptr<Player> player;
     std::vector<TrafficLane> lanes;
     bool isRunning;
     bool paused;
     bool showHelp;
     bool gameOver;
+    bool nightTime;
     int currentField;
     int currentRow;
     int level;
