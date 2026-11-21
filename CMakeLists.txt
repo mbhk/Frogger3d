@@ -29,6 +29,7 @@ add_executable(Frogger3D
     src/Game.cpp
     src/Player.cpp
     src/Enemy.cpp
+    src/Pickup.cpp
     src/Renderer.cpp
     src/Window.cpp
     src/Shader.cpp

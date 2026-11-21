@@ -7,6 +7,7 @@
 #include "Light.h"
 #include "Player.h"
 #include "Enemy.h"
+#include "Pickup.h"
 #include "Shader.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
@@ -45,6 +46,10 @@ const float carSpeedPerStep = 0.6f;
 const int maxSpeedStepDifference = 3;
 const int levelsPerExtraCar = 4;
 const int startCarLimit = 1;
+const float heartSpawnMinTime = 6.0f;
+const float heartSpawnMaxTime = 12.0f;
+const float heartLifetime = 20.0f;
+const float heartHeight = 0.25f;
 const glm::vec4 textColor(1.0f, 1.0f, 1.0f, 1.0f);
 const glm::vec4 accentColor(1.0f, 0.9f, 0.3f, 1.0f);
 const glm::vec4 dimColor(0.7f, 0.7f, 0.7f, 1.0f);
@@ -119,7 +124,7 @@ std::size_t randomIndex(std::mt19937& engine, std::size_t count) {
 
 }
 
-Game::Game() : isRunning(false), paused(false), showHelp(false), gameOver(false), currentField(startField), currentRow(startRow), level(startLevel), lives(startLives), statusTimer(0.0f), respawnTimer(0.0f), carLimit(startCarLimit), nightTime(false), cornField(false), randomEngine(std::random_device{}()) {
+Game::Game() : isRunning(false), paused(false), showHelp(false), gameOver(false), currentField(startField), currentRow(startRow), level(startLevel), lives(startLives), statusTimer(0.0f), respawnTimer(0.0f), heartTimer(heartSpawnMinTime), carLimit(startCarLimit), nightTime(false), cornField(false), randomEngine(std::random_device{}()) {
     window = std::make_unique<Window>(800, 600, "3D Frogger");
     renderer = std::make_unique<Renderer>(window->get());
     textRenderer = std::make_unique<TextRenderer>();
@@ -216,6 +221,59 @@ void Game::updateTraffic(float deltaTime) {
     respawnTimer = randomBetween(randomEngine, respawnMinTime, respawnMaxTime);
 }
 
+void Game::updateHeart(float deltaTime) {
+    if (heart) {
+        heart->update(deltaTime);
+        if (heart->isExpired()) {
+            heart.reset();
+            heartTimer = randomBetween(randomEngine, heartSpawnMinTime, heartSpawnMaxTime);
+        }
+        return;
+    }
+
+    heartTimer -= deltaTime;
+    if (heartTimer > 0.0f) {
+        return;
+    }
+    spawnHeart();
+    heartTimer = randomBetween(randomEngine, heartSpawnMinTime, heartSpawnMaxTime);
+}
+
+void Game::spawnHeart() {
+    // Only tiles in a road lane that have a free gap between the cars
+    std::vector<std::pair<int, float>> spots;
+    for (const auto& lane : lanes) {
+        for (int field = 0; field < fieldCount; ++field) {
+            const float x = fieldCenterX(field);
+            if (isEntryClear(lane, x)) {
+                spots.emplace_back(lane.row, x);
+            }
+        }
+    }
+    if (spots.empty()) {
+        return;
+    }
+
+    const auto& spot = spots[randomIndex(randomEngine, spots.size())];
+    heart = std::make_unique<Pickup>(spot.second, heartHeight, rowCenterZ(spot.first), heartLifetime);
+}
+
+void Game::collectHeart() {
+    if (!heart || !player) {
+        return;
+    }
+    const glm::vec3 frog = player->getPosition();
+    const glm::vec3 center = heart->getPosition();
+    const glm::vec3 halfExtents = heart->getHalfExtents();
+    if (std::abs(frog.x - center.x) < halfExtents.x + frogHalfSize &&
+        std::abs(frog.z - center.z) < halfExtents.z + frogHalfSize) {
+        lives++;
+        showStatus("EXTRA LIFE!", winMessageTime);
+        heart.reset();
+        heartTimer = randomBetween(randomEngine, heartSpawnMinTime, heartSpawnMaxTime);
+    }
+}
+
 Game::~Game() = default;
 
 void Game::run() {
@@ -299,6 +357,8 @@ void Game::restartGame() {
     }
     carLimit = startCarLimit;
     respawnTimer = 0.0f;
+    heart.reset();
+    heartTimer = randomBetween(randomEngine, heartSpawnMinTime, heartSpawnMaxTime);
     applyCarSpeed();
     resetFrog();
 }
@@ -389,11 +449,13 @@ void Game::update(float deltaTime) {
     }
     
     updateTraffic(deltaTime);
+    updateHeart(deltaTime);
 
     if (statusTimer > 0.0f) {
         statusTimer -= deltaTime;
     }
 
+    collectHeart();
     checkCollisions();
 }
 
@@ -447,6 +509,10 @@ void Game::render() {
         for (auto& car : lane.cars) {
             car->render(renderer->getShader());
         }
+    }
+
+    if (heart) {
+        heart->render(renderer->getShader());
     }
 
     renderHUD();

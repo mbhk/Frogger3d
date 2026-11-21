@@ -14,6 +14,7 @@ class Ground;
 class Lamp;
 class Player;
 class Enemy;
+class Pickup;
 
 struct TrafficLane {
     int row;
@@ -35,6 +36,9 @@ public:
     void applyCarSpeed();
     void speedUpRandomLane();
     void updateTraffic(float deltaTime);
+    void updateHeart(float deltaTime);
+    void spawnHeart();
+    void collectHeart();
     void moveAcrossFields(int step);
     void moveRows(int step);
     float fieldCenterX(int field) const;
@@ -55,6 +59,7 @@ private:
     std::vector<std::unique_ptr<Lamp>> lamps;
     std::unique_ptr<Player> player;
     std::vector<TrafficLane> lanes;
+    std::unique_ptr<Pickup> heart;
     bool isRunning;
     bool paused;
     bool showHelp;
@@ -68,6 +73,7 @@ private:
     std::string statusMessage;
     float statusTimer;
     float respawnTimer;
+    float heartTimer;
     int carLimit;
     std::mt19937 randomEngine;
     SDL_Event event;
