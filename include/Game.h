@@ -60,6 +60,7 @@ private:
     bool showHelp;
     bool gameOver;
     bool nightTime;
+    bool cornField;
     int currentField;
     int currentRow;
     int level;

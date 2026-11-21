@@ -1,36 +1,74 @@
 #include "Player.h"
-#include "FrogData.h"
-#include "MeshUtil.h"
 #include "Shader.h"
 #include <GL/glew.h>
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include <iterator>
+#include <cmath>
 #include <vector>
 
 namespace {
 
-// Local space: the eyes sit on the front face (normal (1, 1, -1)), which is turned to face -Z (the goal)
-const float frontYaw = glm::radians(45.0f);
-
+// Local space: the frog faces -Z (the goal), with its feet on y = 0
 struct FrogPart {
     glm::vec3 center;
-    glm::vec3 size;
+    glm::vec3 radii;
     glm::vec3 color;
 };
 
-const FrogPart frogEyes[] = {
-    {glm::vec3(0.27f, 0.10f, -0.19f), glm::vec3(0.12f), glm::vec3(1.0f, 1.0f, 1.0f)},
-    {glm::vec3(0.10f, 0.27f, -0.19f), glm::vec3(0.12f), glm::vec3(1.0f, 1.0f, 1.0f)},
+const glm::vec3 skinColor(0.2f, 0.72f, 0.2f);
+const glm::vec3 darkSkinColor(0.12f, 0.5f, 0.14f);
+const glm::vec3 eyeColor(0.95f, 0.95f, 0.85f);
+const glm::vec3 pupilColor(0.05f, 0.05f, 0.05f);
+
+const FrogPart frogParts[] = {
+    {glm::vec3(0.0f, 0.22f, 0.02f),   glm::vec3(0.30f, 0.20f, 0.34f), skinColor},      // body
+    {glm::vec3(0.0f, 0.24f, -0.22f),  glm::vec3(0.26f, 0.17f, 0.18f), skinColor},      // head
+    {glm::vec3(-0.26f, 0.14f, 0.20f), glm::vec3(0.16f, 0.15f, 0.20f), darkSkinColor},  // left haunch
+    {glm::vec3(0.26f, 0.14f, 0.20f),  glm::vec3(0.16f, 0.15f, 0.20f), darkSkinColor},  // right haunch
+    {glm::vec3(-0.30f, 0.04f, 0.32f), glm::vec3(0.12f, 0.04f, 0.18f), darkSkinColor},  // left back foot
+    {glm::vec3(0.30f, 0.04f, 0.32f),  glm::vec3(0.12f, 0.04f, 0.18f), darkSkinColor},  // right back foot
+    {glm::vec3(-0.24f, 0.12f, -0.18f), glm::vec3(0.08f, 0.07f, 0.10f), skinColor},     // left front arm
+    {glm::vec3(0.24f, 0.12f, -0.18f),  glm::vec3(0.08f, 0.07f, 0.10f), skinColor},     // right front arm
+    {glm::vec3(-0.27f, 0.03f, -0.27f), glm::vec3(0.07f, 0.03f, 0.08f), darkSkinColor}, // left front foot
+    {glm::vec3(0.27f, 0.03f, -0.27f),  glm::vec3(0.07f, 0.03f, 0.08f), darkSkinColor}, // right front foot
+    {glm::vec3(-0.20f, 0.42f, -0.30f), glm::vec3(0.10f), eyeColor},                    // left eye
+    {glm::vec3(0.20f, 0.42f, -0.30f),  glm::vec3(0.10f), eyeColor},                    // right eye
+    {glm::vec3(-0.21f, 0.43f, -0.39f), glm::vec3(0.05f), pupilColor},                  // left pupil
+    {glm::vec3(0.21f, 0.43f, -0.39f),  glm::vec3(0.05f), pupilColor},                  // right pupil
 };
+
+void appendEllipsoid(std::vector<float>& mesh, const FrogPart& part) {
+    const int stacks = 8;
+    const int slices = 12;
+    auto point = [&](int stack, int slice) {
+        const float phi = glm::pi<float>() * stack / stacks;
+        const float theta = glm::two_pi<float>() * slice / slices;
+        const glm::vec3 unit(std::sin(phi) * std::cos(theta), std::cos(phi), std::sin(phi) * std::sin(theta));
+        return part.center + part.radii * unit;
+    };
+    auto push = [&](const glm::vec3& p) {
+        mesh.insert(mesh.end(), {p.x, p.y, p.z, part.color.r, part.color.g, part.color.b});
+    };
+    for (int stack = 0; stack < stacks; ++stack) {
+        for (int slice = 0; slice < slices; ++slice) {
+            push(point(stack, slice));
+            push(point(stack + 1, slice));
+            push(point(stack + 1, slice + 1));
+            push(point(stack, slice));
+            push(point(stack + 1, slice + 1));
+            push(point(stack, slice + 1));
+        }
+    }
+}
 
 }
 
 Player::Player(float x, float y, float z) 
     : position(x, y, z), velocity(0.0f, 0.0f, 0.0f), speed(5.0f), vertexCount(0) {
 
-    std::vector<float> mesh(std::begin(frogVertices), std::end(frogVertices));
-    for (const auto& eye : frogEyes) {
-        appendBox(mesh, eye.center, eye.size, eye.color);
+    std::vector<float> mesh;
+    for (const auto& part : frogParts) {
+        appendEllipsoid(mesh, part);
     }
     vertexCount = static_cast<int>(mesh.size() / 6);
     
@@ -68,9 +106,7 @@ void Player::update(float deltaTime) {
 }
 
 void Player::render(const Shader& shader) const {
-    glm::mat4 model = glm::translate(glm::mat4(1.0f), position);
-    model = glm::rotate(model, frontYaw, glm::vec3(0.0f, 1.0f, 0.0f));
-    shader.setMat4("uModel", model);
+    shader.setMat4("uModel", glm::translate(glm::mat4(1.0f), position));
 
     // Glossy skin: the frog catches light highlights
     shader.setFloat("uSpecularStrength", 0.8f);

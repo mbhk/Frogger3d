@@ -11,12 +11,14 @@ public:
     Ground(const Ground&) = delete;
     Ground& operator=(const Ground&) = delete;
 
-    void render(const Shader& shader) const;
+    void render(const Shader& shader, bool corn) const;
 
 private:
     // OpenGL variables
     unsigned int VAO, VBO;
-    int vertexCount;
+    int sharedVertexCount;
+    int grassVertexCount;
+    int cornVertexCount;
 };
 
 #endif // GROUND_H

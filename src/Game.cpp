@@ -65,6 +65,7 @@ const std::vector<std::string> helpLines = {
     "D / RIGHT ARROW   ONE FIELD RIGHT",
     "P                 PAUSE / RESUME",
     "N                 TOGGLE DAY / NIGHT",
+    "C                 TOGGLE GRASS / CORN",
     "H / ?             TOGGLE HELP",
     "SPACE             START OVER (GAME OVER)",
     "Q                 QUIT",
@@ -118,7 +119,7 @@ std::size_t randomIndex(std::mt19937& engine, std::size_t count) {
 
 }
 
-Game::Game() : isRunning(false), paused(false), showHelp(false), gameOver(false), currentField(startField), currentRow(startRow), level(startLevel), lives(startLives), statusTimer(0.0f), respawnTimer(0.0f), carLimit(startCarLimit), nightTime(false), randomEngine(std::random_device{}()) {
+Game::Game() : isRunning(false), paused(false), showHelp(false), gameOver(false), currentField(startField), currentRow(startRow), level(startLevel), lives(startLives), statusTimer(0.0f), respawnTimer(0.0f), carLimit(startCarLimit), nightTime(false), cornField(false), randomEngine(std::random_device{}()) {
     window = std::make_unique<Window>(800, 600, "3D Frogger");
     renderer = std::make_unique<Renderer>(window->get());
     textRenderer = std::make_unique<TextRenderer>();
@@ -258,6 +259,9 @@ void Game::handleKeyPress(SDL_Keycode key) {
             break;
         case SDLK_n:
             nightTime = !nightTime;
+            break;
+        case SDLK_c:
+            cornField = !cornField;
             break;
         case SDLK_h:
         case SDLK_QUESTION:
@@ -427,7 +431,7 @@ void Game::render() {
     }
 
     // Render pavements and road
-    ground->render(shader);
+    ground->render(shader, cornField);
 
     for (auto& lamp : lamps) {
         lamp->render(shader);
