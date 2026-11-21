@@ -15,6 +15,7 @@ public:
     Lamp& operator=(const Lamp&) = delete;
 
     void render(const Shader& shader) const;
+    void renderShadow(const Shader& shader, const glm::mat4& shadowProjection) const;
     PointLight getLight() const;
 
 private:

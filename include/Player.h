@@ -13,12 +13,15 @@ public:
 
     void update(float deltaTime);
     void render(const Shader& shader) const;
+    void renderShadow(const Shader& shader, const glm::mat4& shadowProjection) const;
     void move(float dx, float dy, float dz);
     glm::vec3 getPosition() const;
     void setPosition(float x, float y, float z);
     void hopTo(float x, float y, float z);
 
 private:
+    glm::mat4 modelMatrix() const;
+
     glm::vec3 position;
     glm::vec3 velocity;
     float speed;

@@ -93,11 +93,14 @@ bool Pickup::isExpired() const {
     return age >= lifetime;
 }
 
-void Pickup::render(const Shader& shader) const {
+glm::mat4 Pickup::modelMatrix() const {
     const float bob = bobHeight * std::sin(age * bobSpeed);
     glm::mat4 model = glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, bob, 0.0f));
-    model = glm::rotate(model, age * spinSpeed, glm::vec3(0.0f, 1.0f, 0.0f));
-    shader.setMat4("uModel", model);
+    return glm::rotate(model, age * spinSpeed, glm::vec3(0.0f, 1.0f, 0.0f));
+}
+
+void Pickup::render(const Shader& shader) const {
+    shader.setMat4("uModel", modelMatrix());
 
     shader.setFloat("uSpecularStrength", 0.8f);
     shader.setFloat("uShininess", 32.0f);
@@ -107,6 +110,17 @@ void Pickup::render(const Shader& shader) const {
     glBindVertexArray(0);
 
     shader.setFloat("uSpecularStrength", 0.0f);
+}
+
+void Pickup::renderShadow(const Shader& shader, const glm::mat4& shadowProjection) const {
+    shader.setMat4("uModel", shadowProjection * modelMatrix());
+    shader.setInt("uShadow", 1);
+
+    glBindVertexArray(VAO);
+    glDrawArrays(GL_TRIANGLES, 0, vertexCount);
+    glBindVertexArray(0);
+
+    shader.setInt("uShadow", 0);
 }
 
 glm::vec3 Pickup::getPosition() const {

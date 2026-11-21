@@ -17,6 +17,7 @@ public:
     bool isPastExit() const;
     void setSpeed(float value);
     void render(const Shader& shader) const;
+    void renderShadow(const Shader& shader, const glm::mat4& shadowProjection) const;
     void move(float dx, float dy, float dz);
     glm::vec3 getPosition() const;
     glm::vec3 getHalfExtents() const;
@@ -33,6 +34,7 @@ private:
 
     // OpenGL variables
     unsigned int VAO, VBO;
+    int emissiveOffset;
     int vertexCount;
 };
 

@@ -38,8 +38,15 @@ uniform float uShininess;
 uniform vec3 uAmbientColor;
 uniform vec3 uSunDirection;
 uniform vec3 uSunColor;
+uniform bool uShadow;
 
 void main() {
+    // Shadows are translucent black; the stencil pass makes sure each pixel is darkened only once
+    if (uShadow) {
+        FragColor = vec4(0.0, 0.0, 0.0, 0.35);
+        return;
+    }
+
     if (uEmissive) {
         FragColor = vec4(vColor, 1.0);
         return;
@@ -78,6 +85,7 @@ Renderer::Renderer(SDL_Window* window) : window(window) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
     
     // Create OpenGL context
     context = SDL_GL_CreateContext(window);
@@ -138,6 +146,22 @@ void Renderer::setCamera(const glm::mat4& view, const glm::mat4& projection) con
     shader->use();
     shader->setMat4("uView", view);
     shader->setMat4("uProjection", projection);
+}
+
+void Renderer::beginShadowPass() const {
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_STENCIL_TEST);
+    glClear(GL_STENCIL_BUFFER_BIT);
+    glStencilFunc(GL_EQUAL, 0, 0xFF);
+    glStencilOp(GL_KEEP, GL_KEEP, GL_INCR);
+    glDepthMask(GL_FALSE);
+}
+
+void Renderer::endShadowPass() const {
+    glDepthMask(GL_TRUE);
+    glDisable(GL_STENCIL_TEST);
+    glDisable(GL_BLEND);
 }
 
 const Shader& Renderer::getShader() const {

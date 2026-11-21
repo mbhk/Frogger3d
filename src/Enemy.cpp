@@ -15,20 +15,26 @@ struct CarPart {
 
 const glm::vec3 bodySize(1.6f, 0.5f, 0.9f);
 const float exitLimit = 8.0f;
-const glm::vec3 headlightColor(1.0f, 0.95f, 0.6f);
-const glm::vec3 taillightColor(0.9f, 0.05f, 0.05f);
+const glm::vec3 headlightColor(1.0f, 1.0f, 0.8f);
+const glm::vec3 taillightColor(1.0f, 0.1f, 0.1f);
+// Wheels reach 0.4 below the car's origin; this lifts them onto the road surface
+const float carLift = 0.4f;
 
 // Local space: the hood points along +X
 const CarPart carParts[] = {
     {glm::vec3(-0.2f, 0.45f, 0.0f),  glm::vec3(0.8f, 0.4f, 0.8f),  glm::vec3(0.7f, 0.8f, 0.9f)},  // cabin
-    {glm::vec3(0.82f, -0.05f, 0.28f),  glm::vec3(0.04f, 0.12f, 0.16f), headlightColor},  // headlight
-    {glm::vec3(0.82f, -0.05f, -0.28f), glm::vec3(0.04f, 0.12f, 0.16f), headlightColor},  // headlight
-    {glm::vec3(-0.82f, -0.05f, 0.28f), glm::vec3(0.04f, 0.12f, 0.16f), taillightColor},  // taillight
-    {glm::vec3(-0.82f, -0.05f, -0.28f), glm::vec3(0.04f, 0.12f, 0.16f), taillightColor},  // taillight
     {glm::vec3(0.5f, -0.25f, 0.5f),  glm::vec3(0.3f, 0.3f, 0.1f),  glm::vec3(0.1f, 0.1f, 0.1f)},  // wheels
     {glm::vec3(-0.5f, -0.25f, 0.5f), glm::vec3(0.3f, 0.3f, 0.1f),  glm::vec3(0.1f, 0.1f, 0.1f)},
     {glm::vec3(0.5f, -0.25f, -0.5f), glm::vec3(0.3f, 0.3f, 0.1f),  glm::vec3(0.1f, 0.1f, 0.1f)},
     {glm::vec3(-0.5f, -0.25f, -0.5f), glm::vec3(0.3f, 0.3f, 0.1f), glm::vec3(0.1f, 0.1f, 0.1f)},
+};
+
+// Light lenses are drawn unlit so they stay bright
+const CarPart lightParts[] = {
+    {glm::vec3(0.83f, -0.05f, 0.28f),  glm::vec3(0.06f, 0.16f, 0.22f), headlightColor},  // headlight
+    {glm::vec3(0.83f, -0.05f, -0.28f), glm::vec3(0.06f, 0.16f, 0.22f), headlightColor},  // headlight
+    {glm::vec3(-0.83f, -0.05f, 0.28f), glm::vec3(0.06f, 0.16f, 0.22f), taillightColor},  // taillight
+    {glm::vec3(-0.83f, -0.05f, -0.28f), glm::vec3(0.06f, 0.16f, 0.22f), taillightColor},  // taillight
 };
 
 struct CarLight {
@@ -46,11 +52,15 @@ const CarLight carLights[] = {
 }
 
 Enemy::Enemy(float x, float y, float z, const glm::vec3& bodyColor, float direction)
-    : position(x, y, z), velocity(0.0f, 0.0f, 0.0f), speed(3.0f), direction(direction), vertexCount(0) {
+    : position(x, y, z), velocity(0.0f, 0.0f, 0.0f), speed(3.0f), direction(direction), emissiveOffset(0), vertexCount(0) {
 
     std::vector<float> mesh;
     appendBox(mesh, glm::vec3(0.0f), bodySize, bodyColor);
     for (const auto& part : carParts) {
+        appendBox(mesh, part.center, part.size, part.color);
+    }
+    emissiveOffset = static_cast<int>(mesh.size() / 6);
+    for (const auto& part : lightParts) {
         appendBox(mesh, part.center, part.size, part.color);
     }
     vertexCount = static_cast<int>(mesh.size() / 6);
@@ -97,8 +107,23 @@ void Enemy::render(const Shader& shader) const {
     shader.setMat4("uModel", modelMatrix());
 
     glBindVertexArray(VAO);
+    shader.setInt("uEmissive", 0);
+    glDrawArrays(GL_TRIANGLES, 0, emissiveOffset);
+    shader.setInt("uEmissive", 1);
+    glDrawArrays(GL_TRIANGLES, emissiveOffset, vertexCount - emissiveOffset);
+    shader.setInt("uEmissive", 0);
+    glBindVertexArray(0);
+}
+
+void Enemy::renderShadow(const Shader& shader, const glm::mat4& shadowProjection) const {
+    shader.setMat4("uModel", shadowProjection * modelMatrix());
+    shader.setInt("uShadow", 1);
+
+    glBindVertexArray(VAO);
     glDrawArrays(GL_TRIANGLES, 0, vertexCount);
     glBindVertexArray(0);
+
+    shader.setInt("uShadow", 0);
 }
 
 std::vector<PointLight> Enemy::getLights() const {
@@ -112,7 +137,7 @@ std::vector<PointLight> Enemy::getLights() const {
 
 glm::mat4 Enemy::modelMatrix() const {
     const float yaw = direction > 0.0f ? 0.0f : glm::radians(180.0f);
-    glm::mat4 model = glm::translate(glm::mat4(1.0f), position);
+    glm::mat4 model = glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, carLift, 0.0f));
     return glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
 }
 

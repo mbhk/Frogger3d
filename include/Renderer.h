@@ -19,6 +19,8 @@ public:
     void setViewport(int width, int height) const;
     void setClearColor(float r, float g, float b, float a) const;
     void setCamera(const glm::mat4& view, const glm::mat4& projection) const;
+    void beginShadowPass() const;
+    void endShadowPass() const;
     const Shader& getShader() const;
 
 private:

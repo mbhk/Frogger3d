@@ -16,10 +16,13 @@ public:
     void update(float deltaTime);
     bool isExpired() const;
     void render(const Shader& shader) const;
+    void renderShadow(const Shader& shader, const glm::mat4& shadowProjection) const;
     glm::vec3 getPosition() const;
     glm::vec3 getHalfExtents() const;
 
 private:
+    glm::mat4 modelMatrix() const;
+
     glm::vec3 position;
     float age;
     float lifetime;

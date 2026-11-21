@@ -61,6 +61,7 @@ const glm::vec3 daySunColor(0.7f, 0.68f, 0.6f);
 const glm::vec3 nightAmbientColor(0.08f, 0.08f, 0.14f);
 const glm::vec3 nightSunColor(0.0f, 0.0f, 0.0f);
 const glm::vec3 sunDirection = glm::normalize(glm::vec3(0.3f, 1.0f, 0.5f));
+const float shadowLift = 0.01f;
 const std::size_t maxLights = 32;
 
 const std::vector<std::string> helpLines = {
@@ -110,6 +111,13 @@ bool canIncreaseStep(const std::vector<TrafficLane>& lanes, std::size_t index) {
         }
     }
     return highest - lowest <= maxSpeedStepDifference;
+}
+
+// Flattens geometry onto the ground plane along the light direction, lifted slightly to avoid z-fighting
+glm::mat4 groundShadowProjection(const glm::vec3& light) {
+    glm::mat4 projection(1.0f);
+    projection[1] = glm::vec4(-light.x / light.y, 0.0f, -light.z / light.y, 0.0f);
+    return glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, shadowLift, 0.0f)) * projection;
 }
 
 float randomBetween(std::mt19937& engine, float low, float high) {
@@ -495,6 +503,25 @@ void Game::render() {
     // Render pavements and road
     ground->render(shader, cornField);
 
+    // Shadows of everything except the grass and corn, which are part of the ground
+    const glm::mat4 shadowProjection = groundShadowProjection(sunDirection);
+    renderer->beginShadowPass();
+    for (auto& lamp : lamps) {
+        lamp->renderShadow(shader, shadowProjection);
+    }
+    if (player) {
+        player->renderShadow(shader, shadowProjection);
+    }
+    for (auto& lane : lanes) {
+        for (auto& car : lane.cars) {
+            car->renderShadow(shader, shadowProjection);
+        }
+    }
+    if (heart) {
+        heart->renderShadow(shader, shadowProjection);
+    }
+    renderer->endShadowPass();
+
     for (auto& lamp : lamps) {
         lamp->render(shader);
     }
@@ -534,12 +561,6 @@ void Game::renderHUD() {
     const float hintY = 10.0f;
     textRenderer->drawRect(hintX - hudPadding, hintY - hudPadding, hintWidth + 2 * hudPadding, charHeight + 2 * hudPadding, panelColor);
     textRenderer->drawText(hint, hintX, hintY, hudScale, accentColor);
-
-    const std::string placement = "FIELD " + std::to_string(currentField + 1) + " / " + std::to_string(fieldCount);
-    const float placementX = hudPadding + 10.0f;
-    const float placementY = height - charHeight - hudPadding - 10.0f;
-    textRenderer->drawRect(placementX - hudPadding, placementY - hudPadding, textRenderer->textWidth(placement, hudScale) + 2 * hudPadding, charHeight + 2 * hudPadding, panelColor);
-    textRenderer->drawText(placement, placementX, placementY, hudScale, accentColor);
 
     const std::string levelText = "LEVEL " + std::to_string(level);
     const std::string livesText = "LIVES " + std::to_string(lives);

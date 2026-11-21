@@ -57,6 +57,17 @@ void Lamp::render(const Shader& shader) const {
     glBindVertexArray(0);
 }
 
+void Lamp::renderShadow(const Shader& shader, const glm::mat4& shadowProjection) const {
+    shader.setMat4("uModel", shadowProjection * glm::translate(glm::mat4(1.0f), position));
+    shader.setInt("uShadow", 1);
+
+    glBindVertexArray(VAO);
+    glDrawArrays(GL_TRIANGLES, 0, vertexCount);
+    glBindVertexArray(0);
+
+    shader.setInt("uShadow", 0);
+}
+
 PointLight Lamp::getLight() const {
     return {lightPosition, lightColor};
 }

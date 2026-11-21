@@ -120,8 +120,12 @@ void Player::update(float deltaTime) {
     }
 }
 
+glm::mat4 Player::modelMatrix() const {
+    return glm::scale(glm::translate(glm::mat4(1.0f), position), glm::vec3(frogScale));
+}
+
 void Player::render(const Shader& shader) const {
-    shader.setMat4("uModel", glm::scale(glm::translate(glm::mat4(1.0f), position), glm::vec3(frogScale)));
+    shader.setMat4("uModel", modelMatrix());
 
     // Glossy skin: the frog catches light highlights
     shader.setFloat("uSpecularStrength", 0.8f);
@@ -132,6 +136,17 @@ void Player::render(const Shader& shader) const {
     glBindVertexArray(0);
 
     shader.setFloat("uSpecularStrength", 0.0f);
+}
+
+void Player::renderShadow(const Shader& shader, const glm::mat4& shadowProjection) const {
+    shader.setMat4("uModel", shadowProjection * modelMatrix());
+    shader.setInt("uShadow", 1);
+
+    glBindVertexArray(VAO);
+    glDrawArrays(GL_TRIANGLES, 0, vertexCount);
+    glBindVertexArray(0);
+
+    shader.setInt("uShadow", 0);
 }
 
 void Player::move(float dx, float dy, float dz) {

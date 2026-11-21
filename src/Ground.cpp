@@ -33,11 +33,22 @@ const float cornLeafLength = 0.22f;
 const glm::vec3 cornStalkColor(0.45f, 0.6f, 0.18f);
 const glm::vec3 cornLeafColor(0.3f, 0.7f, 0.2f);
 const glm::vec3 cornTasselColor(0.9f, 0.75f, 0.2f);
+const glm::vec3 pavementColor(0.6f, 0.6f, 0.6f);
+const glm::vec3 mortarColor(0.42f, 0.42f, 0.44f);
+const glm::vec3 asphaltColor(0.2f, 0.2f, 0.22f);
+const float pavementTileSize = 1.0f;
+const float pavementTileInset = 0.92f;
+const float pavementRowZ[] = {2.5f, -2.5f};
+const float roadHalfDepth = 2.0f;
+const int asphaltSpeckCount = 2500;
+const float detailTop = 0.003f;
+const float detailThickness = 0.004f;
+const float detailCenterY = detailTop - detailThickness * 0.5f;
 
 const Slab slabs[] = {
-    {glm::vec3(0.0f, -0.1f, 2.5f),   glm::vec3(groundWidth, 0.2f, 1.0f), glm::vec3(0.6f, 0.6f, 0.6f)},    // lower pavement
-    {glm::vec3(0.0f, -0.1f, 0.0f),   glm::vec3(groundWidth, 0.2f, 4.0f), glm::vec3(0.2f, 0.2f, 0.22f)},   // road
-    {glm::vec3(0.0f, -0.1f, -2.5f),  glm::vec3(groundWidth, 0.2f, 1.0f), glm::vec3(0.6f, 0.6f, 0.6f)},    // upper pavement
+    {glm::vec3(0.0f, -0.1f, 2.5f),   glm::vec3(groundWidth, 0.2f, 1.0f), mortarColor},    // lower pavement
+    {glm::vec3(0.0f, -0.1f, 0.0f),   glm::vec3(groundWidth, 0.2f, 4.0f), asphaltColor},   // road
+    {glm::vec3(0.0f, -0.1f, -2.5f),  glm::vec3(groundWidth, 0.2f, 1.0f), mortarColor},    // upper pavement
     {glm::vec3(0.0f, 0.005f, 1.0f),  glm::vec3(groundWidth, 0.02f, 0.08f), glm::vec3(0.9f, 0.9f, 0.9f)},  // lane divider
     {glm::vec3(0.0f, 0.005f, 0.0f),  glm::vec3(groundWidth, 0.02f, 0.08f), glm::vec3(0.9f, 0.9f, 0.9f)},  // lane divider
     {glm::vec3(0.0f, 0.005f, -1.0f), glm::vec3(groundWidth, 0.02f, 0.08f), glm::vec3(0.9f, 0.9f, 0.9f)},  // lane divider
@@ -78,6 +89,31 @@ void appendBlade(std::vector<float>& mesh, const glm::vec3& base, float height, 
     push(l0, baseColor); push(r0, baseColor); push(r1, midColor);
     push(l0, baseColor); push(r1, midColor); push(l1, midColor);
     push(l1, midColor); push(r1, midColor); push(tip, tipColor);
+}
+
+// Paving slabs laid over the pavement strips, each with a slightly different shade
+void appendPavementTiles(std::vector<float>& mesh, std::mt19937& engine) {
+    const int tileCount = static_cast<int>(groundWidth / pavementTileSize);
+    for (int i = 0; i < tileCount; ++i) {
+        for (float z : pavementRowZ) {
+            const float x = -groundWidth * 0.5f + (static_cast<float>(i) + 0.5f) * pavementTileSize;
+            const float shade = randomBetween(engine, 0.9f, 1.08f);
+            appendBox(mesh, glm::vec3(x, detailCenterY, z),
+                      glm::vec3(pavementTileSize * pavementTileInset, detailThickness, pavementTileSize * pavementTileInset),
+                      pavementColor * shade);
+        }
+    }
+}
+
+// Light and dark specks of asphalt grain scattered over the road
+void appendAsphalt(std::vector<float>& mesh, std::mt19937& engine) {
+    for (int i = 0; i < asphaltSpeckCount; ++i) {
+        const float x = randomBetween(engine, -groundWidth * 0.5f, groundWidth * 0.5f);
+        const float z = randomBetween(engine, -roadHalfDepth, roadHalfDepth);
+        const float size = randomBetween(engine, 0.02f, 0.06f);
+        const float shade = randomBetween(engine, 0.0f, 1.0f) < 0.6f ? randomBetween(engine, 0.7f, 1.0f) : randomBetween(engine, 1.3f, 1.8f);
+        appendBox(mesh, glm::vec3(x, detailCenterY, z), glm::vec3(size, detailThickness, size), asphaltColor * shade);
+    }
 }
 
 void appendGrassBlades(std::vector<float>& mesh, std::mt19937& engine) {
@@ -131,14 +167,17 @@ void appendCornField(std::vector<float>& mesh, std::mt19937& engine) {
 }
 
 Ground::Ground() : VAO(0), VBO(0), sharedVertexCount(0), grassVertexCount(0), cornVertexCount(0) {
+    std::mt19937 engine(std::random_device{}());
+
     std::vector<float> mesh;
     for (const auto& slab : slabs) {
         appendBox(mesh, slab.center, slab.size, slab.color);
     }
+    appendPavementTiles(mesh, engine);
+    appendAsphalt(mesh, engine);
     appendBox(mesh, glm::vec3(0.0f, grassSurfaceY - 0.1f, 0.0f), glm::vec3(grassBaseSize, 0.2f, grassBaseSize), grassColor);
     sharedVertexCount = static_cast<int>(mesh.size() / 6);
 
-    std::mt19937 engine(std::random_device{}());
     appendGrassBlades(mesh, engine);
     grassVertexCount = static_cast<int>(mesh.size() / 6) - sharedVertexCount;
 
