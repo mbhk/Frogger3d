@@ -24,7 +24,7 @@ const int rowCount = 6;
 const int startRow = 0;
 const int goalRow = rowCount - 1;
 const float rowZeroZ = 2.5f;
-const float frogHalfSize = 0.5f;
+const float frogHalfSize = 0.3f;
 const float cameraDistance = 10.0f;
 const float cameraFovY = 45.0f;
 const float hudScale = 2.0f;
@@ -339,13 +339,13 @@ float Game::fieldCenterX(int field) const {
 }
 
 void Game::placeFrog() {
-    player->setPosition(fieldCenterX(currentField), 0.0f, rowCenterZ(currentRow));
+    player->hopTo(fieldCenterX(currentField), 0.0f, rowCenterZ(currentRow));
 }
 
 void Game::resetFrog() {
     currentField = startField;
     currentRow = startRow;
-    placeFrog();
+    player->setPosition(fieldCenterX(currentField), 0.0f, rowCenterZ(currentRow));
 }
 
 void Game::checkCollisions() {

@@ -3,6 +3,7 @@
 #include <GL/glew.h>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -19,6 +20,10 @@ const glm::vec3 skinColor(0.2f, 0.72f, 0.2f);
 const glm::vec3 darkSkinColor(0.12f, 0.5f, 0.14f);
 const glm::vec3 eyeColor(0.95f, 0.95f, 0.85f);
 const glm::vec3 pupilColor(0.05f, 0.05f, 0.05f);
+
+const float hopDuration = 0.25f;
+const float hopHeight = 0.5f;
+const float frogScale = 0.6f;
 
 const FrogPart frogParts[] = {
     {glm::vec3(0.0f, 0.22f, 0.02f),   glm::vec3(0.30f, 0.20f, 0.34f), skinColor},      // body
@@ -64,7 +69,7 @@ void appendEllipsoid(std::vector<float>& mesh, const FrogPart& part) {
 }
 
 Player::Player(float x, float y, float z) 
-    : position(x, y, z), velocity(0.0f, 0.0f, 0.0f), speed(5.0f), vertexCount(0) {
+    : position(x, y, z), velocity(0.0f, 0.0f, 0.0f), speed(5.0f), hopping(false), hopElapsed(0.0f), vertexCount(0) {
 
     std::vector<float> mesh;
     for (const auto& part : frogParts) {
@@ -103,10 +108,20 @@ void Player::update(float deltaTime) {
     
     // Reset velocity
     velocity = glm::vec3(0.0f);
+
+    if (hopping) {
+        hopElapsed += deltaTime;
+        const float t = std::min(hopElapsed / hopDuration, 1.0f);
+        position = glm::mix(hopStart, hopEnd, t);
+        position.y += hopHeight * 4.0f * t * (1.0f - t);
+        if (t >= 1.0f) {
+            hopping = false;
+        }
+    }
 }
 
 void Player::render(const Shader& shader) const {
-    shader.setMat4("uModel", glm::translate(glm::mat4(1.0f), position));
+    shader.setMat4("uModel", glm::scale(glm::translate(glm::mat4(1.0f), position), glm::vec3(frogScale)));
 
     // Glossy skin: the frog catches light highlights
     shader.setFloat("uSpecularStrength", 0.8f);
@@ -133,4 +148,12 @@ void Player::setPosition(float x, float y, float z) {
     position.x = x;
     position.y = y;
     position.z = z;
+    hopping = false;
+}
+
+void Player::hopTo(float x, float y, float z) {
+    hopStart = position;
+    hopEnd = glm::vec3(x, y, z);
+    hopElapsed = 0.0f;
+    hopping = true;
 }

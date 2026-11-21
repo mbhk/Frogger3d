@@ -16,11 +16,17 @@ public:
     void move(float dx, float dy, float dz);
     glm::vec3 getPosition() const;
     void setPosition(float x, float y, float z);
+    void hopTo(float x, float y, float z);
 
 private:
     glm::vec3 position;
     glm::vec3 velocity;
     float speed;
+
+    bool hopping;
+    glm::vec3 hopStart;
+    glm::vec3 hopEnd;
+    float hopElapsed;
     
     // OpenGL variables
     unsigned int VAO, VBO;
