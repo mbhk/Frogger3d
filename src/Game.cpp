@@ -69,6 +69,7 @@ const std::vector<std::string> helpLines = {
     "S / DOWN ARROW    ONE ROW BACK",
     "A / LEFT ARROW    ONE FIELD LEFT",
     "D / RIGHT ARROW   ONE FIELD RIGHT",
+    "F11               TOGGLE FULLSCREEN",
     "P                 PAUSE / RESUME",
     "N                 TOGGLE DAY / NIGHT",
     "C                 TOGGLE GRASS / CORN",
@@ -323,6 +324,9 @@ void Game::handleKeyPress(SDL_Keycode key) {
         case SDLK_p:
             paused = !paused;
             break;
+        case SDLK_F11:
+            window->toggleFullscreen();
+            break;
         case SDLK_n:
             nightTime = !nightTime;
             break;
@@ -469,6 +473,7 @@ void Game::update(float deltaTime) {
 
 void Game::render() {
     renderer->clear();
+    renderer->setViewport(window->getWidth(), window->getHeight());
 
     glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 6.0f, 8.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     float aspect = static_cast<float>(window->getWidth()) / static_cast<float>(window->getHeight());

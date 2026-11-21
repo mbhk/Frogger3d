@@ -13,11 +13,10 @@ public:
     int getWidth() const;
     int getHeight() const;
     void swapBuffers();
+    void toggleFullscreen();
 
 private:
     std::unique_ptr<SDL_Window, decltype(&SDL_DestroyWindow)> window;
-    int width;
-    int height;
 };
 
 #endif // WINDOW_H
