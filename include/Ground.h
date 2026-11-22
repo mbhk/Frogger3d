@@ -1,6 +1,8 @@
 #ifndef GROUND_H
 #define GROUND_H
 
+#include <glm/glm.hpp>
+
 class Shader;
 
 class Ground {
@@ -12,6 +14,7 @@ public:
     Ground& operator=(const Ground&) = delete;
 
     void render(const Shader& shader, bool corn) const;
+    void renderCornShadow(const Shader& shader, const glm::mat4& shadowProjection) const;
 
 private:
     // OpenGL variables

@@ -72,6 +72,8 @@ private:
     bool gameOver;
     bool nightTime;
     bool cornField;
+    float dayCycleTime;
+    bool timelapse;
     int currentField;
     int currentRow;
     int level;

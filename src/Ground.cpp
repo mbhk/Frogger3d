@@ -218,3 +218,14 @@ void Ground::render(const Shader& shader, bool corn) const {
     }
     glBindVertexArray(0);
 }
+
+void Ground::renderCornShadow(const Shader& shader, const glm::mat4& shadowProjection) const {
+    shader.setMat4("uModel", shadowProjection);
+    shader.setInt("uShadow", 1);
+
+    glBindVertexArray(VAO);
+    glDrawArrays(GL_TRIANGLES, sharedVertexCount + grassVertexCount, cornVertexCount);
+    glBindVertexArray(0);
+
+    shader.setInt("uShadow", 0);
+}

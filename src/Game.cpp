@@ -68,7 +68,13 @@ const glm::vec3 dayAmbientColor(0.35f, 0.35f, 0.35f);
 const glm::vec3 daySunColor(0.7f, 0.68f, 0.6f);
 const glm::vec3 nightAmbientColor(0.08f, 0.08f, 0.14f);
 const glm::vec3 nightSunColor(0.0f, 0.0f, 0.0f);
-const glm::vec3 sunDirection = glm::normalize(glm::vec3(0.3f, 1.0f, 0.5f));
+// The day light sweeps from the left to the right during the day and fades out, then the night follows
+const float dayDuration = 300.0f;
+const float nightDuration = 120.0f;
+const float dayEndIntensity = 0.3f;
+const float dayStartX = -1.0f;
+const float dayEndX = 1.0f;
+const int timelapseSpeed = 5;
 const float shadowLift = 0.01f;
 const std::size_t maxLights = 32;
 
@@ -81,6 +87,7 @@ const std::vector<std::string> helpLines = {
     "E                 PRESS CROSSING BUTTON",
     "P                 PAUSE / RESUME",
     "N                 TOGGLE DAY / NIGHT",
+    "T                 TOGGLE TIMELAPSE",
     "C                 TOGGLE GRASS / CORN",
     "H / ?             TOGGLE HELP",
     "SPACE             START OVER (GAME OVER)",
@@ -147,6 +154,16 @@ glm::mat4 groundShadowProjection(const glm::vec3& light) {
     return glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, shadowLift, 0.0f)) * projection;
 }
 
+// Flattens geometry onto the ground plane as seen from a point light, lifted like groundShadowProjection
+glm::mat4 pointLightShadowProjection(const glm::vec3& light) {
+    const glm::mat4 projection(
+        glm::vec4(light.y, 0.0f, 0.0f, 0.0f),
+        glm::vec4(-light.x, 0.0f, -light.z, -1.0f),
+        glm::vec4(0.0f, 0.0f, light.y, 0.0f),
+        glm::vec4(0.0f, 0.0f, 0.0f, light.y));
+    return glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, shadowLift, 0.0f)) * projection;
+}
+
 float randomBetween(std::mt19937& engine, float low, float high) {
     std::uniform_real_distribution<float> distribution(low, high);
     return distribution(engine);
@@ -159,7 +176,7 @@ std::size_t randomIndex(std::mt19937& engine, std::size_t count) {
 
 }
 
-Game::Game() : isRunning(false), paused(false), showHelp(false), gameOver(false), currentField(startField), currentRow(startRow), level(startLevel), lives(startLives), statusTimer(0.0f), respawnTimer(0.0f), heartTimer(heartSpawnMinTime), carLimit(startCarLimit), nightTime(false), cornField(false), randomEngine(std::random_device{}()) {
+Game::Game() : isRunning(false), paused(false), showHelp(false), gameOver(false), currentField(startField), currentRow(startRow), level(startLevel), lives(startLives), statusTimer(0.0f), respawnTimer(0.0f), heartTimer(heartSpawnMinTime), carLimit(startCarLimit), nightTime(false), cornField(false), dayCycleTime(0.0f), timelapse(false), randomEngine(std::random_device{}()) {
     window = std::make_unique<Window>(800, 600, "3D Frogger");
     renderer = std::make_unique<Renderer>(window->get());
     textRenderer = std::make_unique<TextRenderer>();
@@ -319,8 +336,9 @@ void Game::collectHeart() {
     const glm::vec3 halfExtents = heart->getHalfExtents();
     if (std::abs(frog.x - center.x) < halfExtents.x + frogHalfSize &&
         std::abs(frog.z - center.z) < halfExtents.z + frogHalfSize) {
-        lives++;
-        showStatus("EXTRA LIFE!", winMessageTime);
+        const int extraLives = timelapse ? timelapseSpeed : 1;
+        lives += extraLives;
+        showStatus(timelapse ? "5 EXTRA LIVES!" : "EXTRA LIFE!", winMessageTime);
         heart.reset();
         heartTimer = randomBetween(randomEngine, heartSpawnMinTime, heartSpawnMaxTime);
     }
@@ -347,7 +365,10 @@ void Game::run() {
         
         handleEvents();
         if (!isPaused()) {
-            update(deltaTime);
+            const int steps = timelapse ? timelapseSpeed : 1;
+            for (int step = 0; step < steps && !gameOver; ++step) {
+                update(deltaTime);
+            }
         }
         render();
     }
@@ -380,10 +401,16 @@ void Game::handleKeyPress(SDL_Keycode key) {
             window->toggleFullscreen();
             break;
         case SDLK_n:
+            // Jump to the middle of the other phase of the cycle
+            dayCycleTime = nightTime ? dayDuration * 0.5f : dayDuration + nightDuration * 0.5f;
             nightTime = !nightTime;
             break;
         case SDLK_c:
             cornField = !cornField;
+            break;
+        case SDLK_t:
+            timelapse = !timelapse;
+            showStatus(timelapse ? "TIMELAPSE ON" : "TIMELAPSE OFF", winMessageTime);
             break;
         case SDLK_e:
             pressCrossingButton();
@@ -516,6 +543,9 @@ void Game::update(float deltaTime) {
         player->update(deltaTime);
     }
 
+    dayCycleTime = std::fmod(dayCycleTime + deltaTime, dayDuration + nightDuration);
+    nightTime = dayCycleTime >= dayDuration;
+
     placeCrossing();
     pedestrianLight->update(deltaTime);
     updateTraffic(deltaTime);
@@ -553,9 +583,12 @@ void Game::render() {
 
     const Shader& shader = renderer->getShader();
     shader.setVec3("uViewPos", cameraPosition);
-    shader.setVec3("uAmbientColor", nightTime ? nightAmbientColor : dayAmbientColor);
-    shader.setVec3("uSunDirection", sunDirection);
-    shader.setVec3("uSunColor", nightTime ? nightSunColor : daySunColor);
+    const float dayProgress = std::min(dayCycleTime / dayDuration, 1.0f);
+    const float dayIntensity = 1.0f - dayProgress * (1.0f - dayEndIntensity);
+    const glm::vec3 dayLightDirection = glm::normalize(glm::vec3(glm::mix(dayStartX, dayEndX, dayProgress), 1.0f, 0.5f));
+    shader.setVec3("uAmbientColor", nightTime ? nightAmbientColor : dayAmbientColor * dayIntensity);
+    shader.setVec3("uSunDirection", dayLightDirection);
+    shader.setVec3("uSunColor", nightTime ? nightSunColor : daySunColor * dayIntensity);
     const std::size_t lightCount = std::min(lights.size(), maxLights);
     shader.setInt("uLightCount", static_cast<int>(lightCount));
     for (std::size_t i = 0; i < lightCount; ++i) {
@@ -567,23 +600,39 @@ void Game::render() {
     ground->render(shader, cornField);
     crossing->render(shader);
 
-    // Shadows of everything except the grass and corn, which are part of the ground
-    const glm::mat4 shadowProjection = groundShadowProjection(sunDirection);
-    renderer->beginShadowPass();
-    for (auto& lamp : lamps) {
-        lamp->renderShadow(shader, shadowProjection);
-    }
-    pedestrianLight->renderShadow(shader, shadowProjection);
-    if (player) {
-        player->renderShadow(shader, shadowProjection);
-    }
-    for (auto& lane : lanes) {
-        for (auto& car : lane.cars) {
-            car->renderShadow(shader, shadowProjection);
+    // Shadows of everything except the grass and corn, which are part of the ground.
+    // By day they fall straight down from the ambient light; at night each lamp casts its own shadows.
+    // Lamps and the traffic light are taller than the lamp heads, so they only cast shadows by day.
+    auto renderCasters = [&](const glm::mat4& projection, bool tallObjects) {
+        if (tallObjects) {
+            for (auto& lamp : lamps) {
+                lamp->renderShadow(shader, projection);
+            }
+            pedestrianLight->renderShadow(shader, projection);
         }
-    }
-    if (heart) {
-        heart->renderShadow(shader, shadowProjection);
+        if (cornField) {
+            ground->renderCornShadow(shader, projection);
+        }
+        if (player) {
+            player->renderShadow(shader, projection);
+        }
+        for (auto& lane : lanes) {
+            for (auto& car : lane.cars) {
+                car->renderShadow(shader, projection);
+            }
+        }
+        if (heart) {
+            heart->renderShadow(shader, projection);
+        }
+    };
+
+    renderer->beginShadowPass();
+    if (nightTime) {
+        for (const auto& lamp : lamps) {
+            renderCasters(pointLightShadowProjection(lamp->getLight().position), false);
+        }
+    } else {
+        renderCasters(groundShadowProjection(dayLightDirection), true);
     }
     renderer->endShadowPass();
 
