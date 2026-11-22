@@ -12,6 +12,8 @@ class Renderer;
 class TextRenderer;
 class Ground;
 class Lamp;
+class Crossing;
+class PedestrianLight;
 class Player;
 class Enemy;
 class Pickup;
@@ -39,6 +41,8 @@ public:
     void updateHeart(float deltaTime);
     void spawnHeart();
     void collectHeart();
+    void pressCrossingButton();
+    void placeCrossing();
     void moveAcrossFields(int step);
     void moveRows(int step);
     float fieldCenterX(int field) const;
@@ -57,6 +61,8 @@ private:
     std::unique_ptr<TextRenderer> textRenderer;
     std::unique_ptr<Ground> ground;
     std::vector<std::unique_ptr<Lamp>> lamps;
+    std::unique_ptr<Crossing> crossing;
+    std::unique_ptr<PedestrianLight> pedestrianLight;
     std::unique_ptr<Player> player;
     std::vector<TrafficLane> lanes;
     std::unique_ptr<Pickup> heart;

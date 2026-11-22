@@ -5,6 +5,8 @@
 #include "Ground.h"
 #include "Lamp.h"
 #include "Light.h"
+#include "PedestrianLight.h"
+#include "Crossing.h"
 #include "Player.h"
 #include "Enemy.h"
 #include "Pickup.h"
@@ -13,6 +15,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <random>
 #include <chrono>
@@ -39,6 +42,7 @@ const int startLevel = 1;
 const int startLives = 3;
 const float carSpawnX = 8.5f;
 const float minSpawnGap = 2.5f;
+const float followGap = 0.5f;
 const float respawnMinTime = 0.3f;
 const float respawnMaxTime = 1.0f;
 const float baseCarSpeed = 3.0f;
@@ -50,6 +54,10 @@ const float heartSpawnMinTime = 6.0f;
 const float heartSpawnMaxTime = 12.0f;
 const float heartLifetime = 20.0f;
 const float heartHeight = 0.25f;
+// The crossing covers crossingField, the traffic light stands on the field right of the crossing
+const int crossingField = startField + 3;
+const int buttonField = crossingField + 1;
+const float pedestrianLightZ = 2.15f;
 const glm::vec4 textColor(1.0f, 1.0f, 1.0f, 1.0f);
 const glm::vec4 accentColor(1.0f, 0.9f, 0.3f, 1.0f);
 const glm::vec4 dimColor(0.7f, 0.7f, 0.7f, 1.0f);
@@ -70,6 +78,7 @@ const std::vector<std::string> helpLines = {
     "A / LEFT ARROW    ONE FIELD LEFT",
     "D / RIGHT ARROW   ONE FIELD RIGHT",
     "F11               TOGGLE FULLSCREEN",
+    "E                 PRESS CROSSING BUTTON",
     "P                 PAUSE / RESUME",
     "N                 TOGGLE DAY / NIGHT",
     "C                 TOGGLE GRASS / CORN",
@@ -99,6 +108,23 @@ bool isEntryClear(const TrafficLane& lane, float entryX) {
         }
     }
     return true;
+}
+
+// Distance between a car's rear edge and the front edge of the nearest car ahead of it in the same lane
+float gapToLeader(const TrafficLane& lane, const Enemy& car) {
+    const float halfLength = car.getHalfExtents().x;
+    const float x = car.getPosition().x;
+    float gap = std::numeric_limits<float>::max();
+    for (const auto& other : lane.cars) {
+        if (other.get() == &car) {
+            continue;
+        }
+        const float distance = (other->getPosition().x - x) * lane.direction;
+        if (distance > 0.0f) {
+            gap = std::min(gap, distance - 2.0f * halfLength);
+        }
+    }
+    return gap;
 }
 
 // True if raising the lane at index by one step keeps all lanes within maxSpeedStepDifference
@@ -145,6 +171,7 @@ Game::Game() : isRunning(false), paused(false), showHelp(false), gameOver(false)
             lamps.push_back(std::make_unique<Lamp>(glm::vec3(offsetX, 0.0f, rowCenterZ(row))));
         }
     }
+    pedestrianLight = std::make_unique<PedestrianLight>(glm::vec3(fieldCenterX(buttonField), 0.0f, pedestrianLightZ));
     isRunning = true;
     
     // Create the frog on the lower pavement
@@ -154,6 +181,19 @@ Game::Game() : isRunning(false), paused(false), showHelp(false), gameOver(false)
     for (int row = 1; row < goalRow; ++row) {
         lanes.push_back({row, laneDirection(row), 0, {}});
     }
+
+    std::vector<glm::vec2> laneLayout;
+    for (const auto& lane : lanes) {
+        laneLayout.emplace_back(rowCenterZ(lane.row), lane.direction);
+    }
+    crossing = std::make_unique<Crossing>(glm::vec3(0.0f), 0.0f, laneLayout);
+    placeCrossing();
+}
+
+void Game::placeCrossing() {
+    const float fieldWidth = fieldCenterX(crossingField + 1) - fieldCenterX(crossingField);
+    crossing->setGeometry(glm::vec3(fieldCenterX(crossingField), 0.0f, 0.0f), fieldWidth * 0.5f);
+    pedestrianLight->setPosition(glm::vec3(fieldCenterX(buttonField), 0.0f, pedestrianLightZ));
 }
 
 void Game::spawnCar(TrafficLane& lane, float x) {
@@ -190,6 +230,9 @@ void Game::speedUpRandomLane() {
 void Game::updateTraffic(float deltaTime) {
     for (auto& lane : lanes) {
         for (auto& car : lane.cars) {
+            const bool stopped = crossing->stopsCar(car->getPosition(), lane.direction, car->getHalfExtents().x, pedestrianLight->blocksTraffic())
+                || gapToLeader(lane, *car) < followGap;
+            car->setSpeed(stopped ? 0.0f : carSpeed(lane));
             car->update(deltaTime);
         }
 
@@ -283,6 +326,15 @@ void Game::collectHeart() {
     }
 }
 
+void Game::pressCrossingButton() {
+    if (!player || isPaused() || currentRow != startRow || currentField != buttonField) {
+        return;
+    }
+    if (pedestrianLight->press()) {
+        showStatus("WAIT FOR GREEN", winMessageTime);
+    }
+}
+
 Game::~Game() = default;
 
 void Game::run() {
@@ -333,6 +385,9 @@ void Game::handleKeyPress(SDL_Keycode key) {
         case SDLK_c:
             cornField = !cornField;
             break;
+        case SDLK_e:
+            pressCrossingButton();
+            break;
         case SDLK_h:
         case SDLK_QUESTION:
             showHelp = !showHelp;
@@ -371,6 +426,7 @@ void Game::restartGame() {
     respawnTimer = 0.0f;
     heart.reset();
     heartTimer = randomBetween(randomEngine, heartSpawnMinTime, heartSpawnMaxTime);
+    pedestrianLight->reset();
     applyCarSpeed();
     resetFrog();
 }
@@ -459,7 +515,9 @@ void Game::update(float deltaTime) {
     if (player) {
         player->update(deltaTime);
     }
-    
+
+    placeCrossing();
+    pedestrianLight->update(deltaTime);
     updateTraffic(deltaTime);
     updateHeart(deltaTime);
 
@@ -507,6 +565,7 @@ void Game::render() {
 
     // Render pavements and road
     ground->render(shader, cornField);
+    crossing->render(shader);
 
     // Shadows of everything except the grass and corn, which are part of the ground
     const glm::mat4 shadowProjection = groundShadowProjection(sunDirection);
@@ -514,6 +573,7 @@ void Game::render() {
     for (auto& lamp : lamps) {
         lamp->renderShadow(shader, shadowProjection);
     }
+    pedestrianLight->renderShadow(shader, shadowProjection);
     if (player) {
         player->renderShadow(shader, shadowProjection);
     }
@@ -530,6 +590,7 @@ void Game::render() {
     for (auto& lamp : lamps) {
         lamp->render(shader);
     }
+    pedestrianLight->render(shader);
     
     // Render player
     if (player) {
