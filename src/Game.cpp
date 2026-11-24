@@ -50,10 +50,12 @@ const float carSpeedPerStep = 0.6f;
 const int maxSpeedStepDifference = 3;
 const int levelsPerExtraCar = 4;
 const int startCarLimit = 1;
-const float heartSpawnMinTime = 6.0f;
-const float heartSpawnMaxTime = 12.0f;
-const float heartLifetime = 20.0f;
+const float pickupSpawnMinTime = 6.0f;
+const float pickupSpawnMaxTime = 12.0f;
+const float stoneSpawnChance = 0.75f;
 const float heartHeight = 0.25f;
+const float pickupLifetime = 20.0f;
+const float stonePileZ = 2.75f;
 // The crossing covers crossingField, the traffic light stands on the field right of the crossing
 const int crossingField = startField + 3;
 const int buttonField = crossingField + 1;
@@ -176,7 +178,7 @@ std::size_t randomIndex(std::mt19937& engine, std::size_t count) {
 
 }
 
-Game::Game() : isRunning(false), paused(false), showHelp(false), gameOver(false), currentField(startField), currentRow(startRow), level(startLevel), lives(startLives), statusTimer(0.0f), respawnTimer(0.0f), heartTimer(heartSpawnMinTime), carLimit(startCarLimit), nightTime(false), cornField(false), dayCycleTime(0.0f), timelapse(false), randomEngine(std::random_device{}()) {
+Game::Game() : isRunning(false), paused(false), showHelp(false), gameOver(false), currentField(startField), currentRow(startRow), level(startLevel), lives(startLives), statusTimer(0.0f), respawnTimer(0.0f), pickupTimer(pickupSpawnMinTime), stoneCount(0), carLimit(startCarLimit), nightTime(false), cornField(false), dayCycleTime(0.0f), timelapse(false), randomEngine(std::random_device{}()) {
     window = std::make_unique<Window>(800, 600, "3D Frogger");
     renderer = std::make_unique<Renderer>(window->get());
     textRenderer = std::make_unique<TextRenderer>();
@@ -290,25 +292,33 @@ void Game::updateTraffic(float deltaTime) {
     respawnTimer = randomBetween(randomEngine, respawnMinTime, respawnMaxTime);
 }
 
-void Game::updateHeart(float deltaTime) {
+void Game::updatePickups(float deltaTime) {
     if (heart) {
         heart->update(deltaTime);
         if (heart->isExpired()) {
             heart.reset();
-            heartTimer = randomBetween(randomEngine, heartSpawnMinTime, heartSpawnMaxTime);
+            pickupTimer = randomBetween(randomEngine, pickupSpawnMinTime, pickupSpawnMaxTime);
+        }
+        return;
+    }
+    if (stone) {
+        stone->update(deltaTime);
+        if (stone->isExpired()) {
+            stone.reset();
+            pickupTimer = randomBetween(randomEngine, pickupSpawnMinTime, pickupSpawnMaxTime);
         }
         return;
     }
 
-    heartTimer -= deltaTime;
-    if (heartTimer > 0.0f) {
+    pickupTimer -= deltaTime;
+    if (pickupTimer > 0.0f) {
         return;
     }
-    spawnHeart();
-    heartTimer = randomBetween(randomEngine, heartSpawnMinTime, heartSpawnMaxTime);
+    spawnPickup();
+    pickupTimer = randomBetween(randomEngine, pickupSpawnMinTime, pickupSpawnMaxTime);
 }
 
-void Game::spawnHeart() {
+void Game::spawnPickup() {
     // Only tiles in a road lane that have a free gap between the cars
     std::vector<std::pair<int, float>> spots;
     for (const auto& lane : lanes) {
@@ -324,7 +334,13 @@ void Game::spawnHeart() {
     }
 
     const auto& spot = spots[randomIndex(randomEngine, spots.size())];
-    heart = std::make_unique<Pickup>(spot.second, heartHeight, rowCenterZ(spot.first), heartLifetime);
+    const float x = spot.second;
+    const float z = rowCenterZ(spot.first);
+    if (randomBetween(randomEngine, 0.0f, 1.0f) < stoneSpawnChance) {
+        stone = std::make_unique<Pickup>(x, heartHeight, z, pickupLifetime, Pickup::PickupType::Stone);
+    } else {
+        heart = std::make_unique<Pickup>(x, heartHeight, z, pickupLifetime);
+    }
 }
 
 void Game::collectHeart() {
@@ -340,7 +356,23 @@ void Game::collectHeart() {
         lives += extraLives;
         showStatus(timelapse ? "5 EXTRA LIVES!" : "EXTRA LIFE!", winMessageTime);
         heart.reset();
-        heartTimer = randomBetween(randomEngine, heartSpawnMinTime, heartSpawnMaxTime);
+        pickupTimer = randomBetween(randomEngine, pickupSpawnMinTime, pickupSpawnMaxTime);
+    }
+}
+
+void Game::collectStone() {
+    if (!stone || !player) {
+        return;
+    }
+    const glm::vec3 frog = player->getPosition();
+    const glm::vec3 center = stone->getPosition();
+    const glm::vec3 halfExtents = stone->getHalfExtents();
+    if (std::abs(frog.x - center.x) < halfExtents.x + frogHalfSize &&
+        std::abs(frog.z - center.z) < halfExtents.z + frogHalfSize) {
+        stoneCount++;
+        showStatus("STONES COLLECTED!", winMessageTime);
+        stone.reset();
+        pickupTimer = randomBetween(randomEngine, pickupSpawnMinTime, pickupSpawnMaxTime);
     }
 }
 
@@ -348,7 +380,8 @@ void Game::pressCrossingButton() {
     if (!player || isPaused() || currentRow != startRow || currentField != buttonField) {
         return;
     }
-    if (pedestrianLight->press()) {
+    if (pedestrianLight->press(stoneCount)) {
+        stoneCount = 0;
         showStatus("WAIT FOR GREEN", winMessageTime);
     }
 }
@@ -452,8 +485,10 @@ void Game::restartGame() {
     carLimit = startCarLimit;
     respawnTimer = 0.0f;
     heart.reset();
-    heartTimer = randomBetween(randomEngine, heartSpawnMinTime, heartSpawnMaxTime);
+    pickupTimer = randomBetween(randomEngine, pickupSpawnMinTime, pickupSpawnMaxTime);
     pedestrianLight->reset();
+    stone.reset();
+    stoneCount = 0;
     applyCarSpeed();
     resetFrog();
 }
@@ -549,13 +584,14 @@ void Game::update(float deltaTime) {
     placeCrossing();
     pedestrianLight->update(deltaTime);
     updateTraffic(deltaTime);
-    updateHeart(deltaTime);
+    updatePickups(deltaTime);
 
     if (statusTimer > 0.0f) {
         statusTimer -= deltaTime;
     }
 
     collectHeart();
+    collectStone();
     checkCollisions();
 }
 
@@ -599,6 +635,9 @@ void Game::render() {
     // Render pavements and road
     ground->render(shader, cornField);
     crossing->render(shader);
+    if (!pedestrianLight->blocksTraffic()) {
+        crossing->renderStonePile(shader, stoneCount, glm::vec3(fieldCenterX(buttonField), 0.0f, stonePileZ));
+    }
 
     // Shadows of everything except the grass and corn, which are part of the ground.
     // By day they fall straight down from the ambient light; at night each lamp casts its own shadows.
@@ -623,6 +662,9 @@ void Game::render() {
         }
         if (heart) {
             heart->renderShadow(shader, projection);
+        }
+        if (stone) {
+            stone->renderShadow(shader, projection);
         }
     };
 
@@ -655,6 +697,9 @@ void Game::render() {
 
     if (heart) {
         heart->render(renderer->getShader());
+    }
+    if (stone) {
+        stone->render(renderer->getShader());
     }
 
     renderHUD();

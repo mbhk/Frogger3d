@@ -38,9 +38,10 @@ public:
     void applyCarSpeed();
     void speedUpRandomLane();
     void updateTraffic(float deltaTime);
-    void updateHeart(float deltaTime);
-    void spawnHeart();
+    void updatePickups(float deltaTime);
+    void spawnPickup();
     void collectHeart();
+    void collectStone();
     void pressCrossingButton();
     void placeCrossing();
     void moveAcrossFields(int step);
@@ -66,6 +67,8 @@ private:
     std::unique_ptr<Player> player;
     std::vector<TrafficLane> lanes;
     std::unique_ptr<Pickup> heart;
+    std::unique_ptr<Pickup> stone;
+    int stoneCount;
     bool isRunning;
     bool paused;
     bool showHelp;
@@ -81,7 +84,7 @@ private:
     std::string statusMessage;
     float statusTimer;
     float respawnTimer;
-    float heartTimer;
+    float pickupTimer;
     int carLimit;
     std::mt19937 randomEngine;
     SDL_Event event;

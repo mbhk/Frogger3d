@@ -14,7 +14,7 @@ public:
     PedestrianLight& operator=(const PedestrianLight&) = delete;
 
     void update(float deltaTime);
-    bool press();
+    bool press(int stoneCount = 0);
     void reset();
     void setPosition(const glm::vec3& base);
     bool blocksTraffic() const;

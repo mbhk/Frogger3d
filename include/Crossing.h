@@ -18,9 +18,11 @@ public:
     void setGeometry(const glm::vec3& center, float halfWidth);
     bool stopsCar(const glm::vec3& carPosition, float carDirection, float carHalfLength, bool signalActive) const;
     void render(const Shader& shader) const;
+    void renderStonePile(const Shader& shader, int stoneCount, const glm::vec3& pileCenter) const;
 
 private:
     void uploadMesh();
+    void uploadStonePile();
 
     glm::vec3 position;
     float halfWidth;
@@ -29,6 +31,10 @@ private:
     // OpenGL variables
     unsigned int VAO, VBO;
     int vertexCount;
+
+    // Stone pile rendering data
+    unsigned int stonePileVAO, stonePileVBO;
+    int stonePileVertexCount;
 };
 
 #endif // CROSSING_H

@@ -7,7 +7,13 @@ class Shader;
 
 class Pickup {
 public:
+    enum class PickupType {
+        Heart,
+        Stone
+    };
+
     Pickup(float x, float y, float z, float lifetime);
+    Pickup(float x, float y, float z, float lifetime, PickupType type);
     ~Pickup();
 
     Pickup(const Pickup&) = delete;
@@ -19,6 +25,7 @@ public:
     void renderShadow(const Shader& shader, const glm::mat4& shadowProjection) const;
     glm::vec3 getPosition() const;
     glm::vec3 getHalfExtents() const;
+    PickupType getType() const;
 
 private:
     glm::mat4 modelMatrix() const;
@@ -26,6 +33,7 @@ private:
     glm::vec3 position;
     float age;
     float lifetime;
+    PickupType type;
 
     // OpenGL variables
     unsigned int VAO, VBO;

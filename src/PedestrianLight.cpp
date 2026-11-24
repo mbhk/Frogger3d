@@ -82,8 +82,9 @@ void PedestrianLight::update(float deltaTime) {
     }
 }
 
-bool PedestrianLight::press() {
-    if (phase != Phase::Off) {
+bool PedestrianLight::press(int stoneCount) {
+    // Only activate if we have at least 3 stones
+    if (phase != Phase::Off || stoneCount < 3) {
         return false;
     }
     phase = Phase::Red;

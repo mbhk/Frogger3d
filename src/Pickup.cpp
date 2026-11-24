@@ -1,4 +1,5 @@
 #include "Pickup.h"
+#include "MeshUtil.h"
 #include "Shader.h"
 #include <GL/glew.h>
 #include <glm/gtc/constants.hpp>
@@ -12,10 +13,12 @@ const int outlineSegments = 96;
 const float heartScale = 0.025f;
 const float heartHalfDepth = 0.06f;
 const glm::vec3 heartColor(1.0f, 0.15f, 0.25f);
+const glm::vec3 stoneSize(0.5f, 0.3f, 0.4f);
+const glm::vec3 stoneColor(0.55f, 0.55f, 0.58f);
 const float bobHeight = 0.08f;
 const float bobSpeed = 3.0f;
 const float spinSpeed = 2.5f;
-const glm::vec3 heartHalfExtents(0.4f, 0.3f, 0.4f);
+const glm::vec3 pickupHalfExtents(0.4f, 0.3f, 0.4f);
 
 // Classic parametric heart curve, scaled and centred on the origin
 glm::vec2 heartOutline(float t) {
@@ -28,12 +31,8 @@ void pushVertex(std::vector<float>& mesh, const glm::vec3& p) {
     mesh.insert(mesh.end(), {p.x, p.y, p.z, heartColor.r, heartColor.g, heartColor.b});
 }
 
-}
-
-Pickup::Pickup(float x, float y, float z, float lifetime)
-    : position(x, y, z), age(0.0f), lifetime(lifetime), VAO(0), VBO(0), vertexCount(0) {
-
-    // Flat heart slab: front and back faces are fans from the centre, the rim is the side wall
+// Flat heart slab: front and back faces are fans from the centre, the rim is the side wall
+std::vector<float> heartMesh() {
     std::vector<glm::vec2> outline;
     for (int i = 0; i < outlineSegments; ++i) {
         outline.push_back(heartOutline(glm::two_pi<float>() * i / outlineSegments));
@@ -61,6 +60,25 @@ Pickup::Pickup(float x, float y, float z, float lifetime)
         pushVertex(mesh, bBack);
         pushVertex(mesh, aBack);
     }
+    return mesh;
+}
+
+std::vector<float> stoneMesh() {
+    std::vector<float> mesh;
+    appendBox(mesh, glm::vec3(0.0f), stoneSize, stoneColor);
+    return mesh;
+}
+
+}
+
+Pickup::Pickup(float x, float y, float z, float lifetime)
+    : Pickup(x, y, z, lifetime, PickupType::Heart) {
+}
+
+Pickup::Pickup(float x, float y, float z, float lifetime, PickupType type)
+    : position(x, y, z), age(0.0f), lifetime(lifetime), type(type), VAO(0), VBO(0), vertexCount(0) {
+
+    const std::vector<float> mesh = type == PickupType::Stone ? stoneMesh() : heartMesh();
     vertexCount = static_cast<int>(mesh.size() / 6);
 
     glGenVertexArrays(1, &VAO);
@@ -128,5 +146,9 @@ glm::vec3 Pickup::getPosition() const {
 }
 
 glm::vec3 Pickup::getHalfExtents() const {
-    return heartHalfExtents;
+    return pickupHalfExtents;
+}
+
+Pickup::PickupType Pickup::getType() const {
+    return type;
 }
