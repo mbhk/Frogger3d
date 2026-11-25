@@ -41,6 +41,8 @@ const float hitMessageTime = 1.5f;
 const int startLevel = 1;
 const int startLives = 3;
 const float carSpawnX = 8.5f;
+const float normalCarChance = 0.5f;
+const float sportsCarChance = 0.3f;
 const float minSpawnGap = 2.5f;
 const float followGap = 0.5f;
 const float respawnMinTime = 0.3f;
@@ -220,7 +222,14 @@ void Game::spawnCar(TrafficLane& lane, float x) {
         randomBetween(randomEngine, 0.2f, 1.0f),
         randomBetween(randomEngine, 0.2f, 1.0f),
         randomBetween(randomEngine, 0.2f, 1.0f));
-    lane.cars.push_back(std::make_unique<Enemy>(x, 0.0f, rowCenterZ(lane.row), color, lane.direction));
+    const float roll = randomBetween(randomEngine, 0.0f, 1.0f);
+    CarType carType = CarType::HAULER;
+    if (roll < normalCarChance) {
+        carType = CarType::NORMAL;
+    } else if (roll < normalCarChance + sportsCarChance) {
+        carType = CarType::SPORTS;
+    }
+    lane.cars.push_back(std::make_unique<Enemy>(x, 0.0f, rowCenterZ(lane.row), color, lane.direction, carType));
     lane.cars.back()->setSpeed(carSpeed(lane));
 }
 

@@ -2,7 +2,9 @@
 #include "MeshUtil.h"
 #include "Shader.h"
 #include <GL/glew.h>
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <cmath>
 #include <vector>
 
 namespace {
@@ -13,55 +15,146 @@ struct CarPart {
     glm::vec3 color;
 };
 
-const glm::vec3 bodySize(1.6f, 0.5f, 0.9f);
 const float exitLimit = 8.0f;
 const glm::vec3 headlightColor(1.0f, 1.0f, 0.8f);
 const glm::vec3 taillightColor(1.0f, 0.1f, 0.1f);
+const glm::vec3 lightSize(0.06f, 0.16f, 0.22f);
+// Distance from the body side to the centre of a light lens
+const float lightInset = 0.03f;
 // Wheels reach 0.4 below the car's origin; this lifts them onto the road surface
 const float carLift = 0.4f;
+const float wheelSegments = 16.0f;
+const float archSegments = 8.0f;
+const float archInset = 0.005f;
+const float archInnerRadius = 0.16f;
+const float archOuterRadius = 0.23f;
+const glm::vec3 archColor(0.05f, 0.05f, 0.05f);
+const glm::vec3 hubColor(0.6f, 0.6f, 0.65f);
+
+const glm::vec3 normalColor(0.7f, 0.8f, 0.9f);
+const glm::vec3 sportsColor(0.9f, 0.2f, 0.2f);
+const glm::vec3 haulerColor(0.8f, 0.8f, 0.2f);
+
+const glm::vec3 normalBodySize(1.6f, 0.5f, 0.9f);
+const glm::vec3 sportsBodySize(1.8f, 0.4f, 0.8f);
+const glm::vec3 haulerBodySize(2.2f, 0.6f, 0.8f);
 
 // Local space: the hood points along +X
-const CarPart carParts[] = {
-    {glm::vec3(-0.2f, 0.45f, 0.0f),  glm::vec3(0.8f, 0.4f, 0.8f),  glm::vec3(0.7f, 0.8f, 0.9f)},  // cabin
-    {glm::vec3(0.5f, -0.25f, 0.5f),  glm::vec3(0.3f, 0.3f, 0.1f),  glm::vec3(0.1f, 0.1f, 0.1f)},  // wheels
-    {glm::vec3(-0.5f, -0.25f, 0.5f), glm::vec3(0.3f, 0.3f, 0.1f),  glm::vec3(0.1f, 0.1f, 0.1f)},
-    {glm::vec3(0.5f, -0.25f, -0.5f), glm::vec3(0.3f, 0.3f, 0.1f),  glm::vec3(0.1f, 0.1f, 0.1f)},
-    {glm::vec3(-0.5f, -0.25f, -0.5f), glm::vec3(0.3f, 0.3f, 0.1f), glm::vec3(0.1f, 0.1f, 0.1f)},
+const CarPart normalParts[] = {
+    {glm::vec3(-0.2f, 0.45f, 0.0f),  glm::vec3(0.8f, 0.4f, 0.8f),  normalColor},  // cabin
+    {glm::vec3(0.5f, -0.25f, 0.41f),  glm::vec3(0.3f, 0.3f, 0.08f),  glm::vec3(0.1f, 0.1f, 0.1f)},  // wheels
+    {glm::vec3(-0.5f, -0.25f, 0.41f), glm::vec3(0.3f, 0.3f, 0.08f),  glm::vec3(0.1f, 0.1f, 0.1f)},
+    {glm::vec3(0.5f, -0.25f, -0.41f), glm::vec3(0.3f, 0.3f, 0.08f),  glm::vec3(0.1f, 0.1f, 0.1f)},
+    {glm::vec3(-0.5f, -0.25f, -0.41f), glm::vec3(0.3f, 0.3f, 0.08f), glm::vec3(0.1f, 0.1f, 0.1f)},
 };
 
-// Light lenses are drawn unlit so they stay bright
-const CarPart lightParts[] = {
-    {glm::vec3(0.83f, -0.05f, 0.28f),  glm::vec3(0.06f, 0.16f, 0.22f), headlightColor},  // headlight
-    {glm::vec3(0.83f, -0.05f, -0.28f), glm::vec3(0.06f, 0.16f, 0.22f), headlightColor},  // headlight
-    {glm::vec3(-0.83f, -0.05f, 0.28f), glm::vec3(0.06f, 0.16f, 0.22f), taillightColor},  // taillight
-    {glm::vec3(-0.83f, -0.05f, -0.28f), glm::vec3(0.06f, 0.16f, 0.22f), taillightColor},  // taillight
+const CarPart sportsParts[] = {
+    {glm::vec3(0.0f, 0.4f, 0.0f),  glm::vec3(0.8f, 0.4f, 0.8f),  sportsColor},  // cabin
+    {glm::vec3(0.8f, -0.25f, 0.36f),  glm::vec3(0.3f, 0.3f, 0.08f),  glm::vec3(0.1f, 0.1f, 0.1f)},  // wheels
+    {glm::vec3(-0.8f, -0.25f, 0.36f), glm::vec3(0.3f, 0.3f, 0.08f),  glm::vec3(0.1f, 0.1f, 0.1f)},
+    {glm::vec3(0.8f, -0.25f, -0.36f), glm::vec3(0.3f, 0.3f, 0.08f),  glm::vec3(0.1f, 0.1f, 0.1f)},
+    {glm::vec3(-0.8f, -0.25f, -0.36f), glm::vec3(0.3f, 0.3f, 0.08f), glm::vec3(0.1f, 0.1f, 0.1f)},
 };
 
-struct CarLight {
-    glm::vec3 center;
-    glm::vec3 color;
+const CarPart haulerParts[] = {
+    {glm::vec3(-0.3f, 0.5f, 0.0f),  glm::vec3(1.0f, 0.5f, 0.8f),  haulerColor},  // cabin
+    {glm::vec3(1.0f, -0.25f, 0.36f),  glm::vec3(0.3f, 0.3f, 0.08f),  glm::vec3(0.1f, 0.1f, 0.1f)},  // wheels
+    {glm::vec3(-1.0f, -0.25f, 0.36f), glm::vec3(0.3f, 0.3f, 0.08f),  glm::vec3(0.1f, 0.1f, 0.1f)},
+    {glm::vec3(1.0f, -0.25f, -0.36f), glm::vec3(0.3f, 0.3f, 0.08f),  glm::vec3(0.1f, 0.1f, 0.1f)},
+    {glm::vec3(-1.0f, -0.25f, -0.36f), glm::vec3(0.3f, 0.3f, 0.08f), glm::vec3(0.1f, 0.1f, 0.1f)},
 };
 
-const CarLight carLights[] = {
-    {glm::vec3(0.82f, -0.05f, 0.28f), headlightColor},
-    {glm::vec3(0.82f, -0.05f, -0.28f), headlightColor},
-    {glm::vec3(-0.82f, -0.05f, 0.28f), taillightColor},
-    {glm::vec3(-0.82f, -0.05f, -0.28f), taillightColor},
-};
+// Helper function to get car parts and body size based on car type
+const CarPart* getCarParts(CarType carType, glm::vec3& bodySizeOut) {
+    switch (carType) {
+        case CarType::NORMAL:
+            bodySizeOut = normalBodySize;
+            return normalParts;
+        case CarType::SPORTS:
+            bodySizeOut = sportsBodySize;
+            return sportsParts;
+        case CarType::HAULER:
+            bodySizeOut = haulerBodySize;
+            return haulerParts;
+    }
+    bodySizeOut = normalBodySize;
+    return normalParts;
+}
+
+void pushVertex(std::vector<float>& out, const glm::vec3& p, const glm::vec3& color) {
+    out.insert(out.end(), {p.x, p.y, p.z, color.r, color.g, color.b});
+}
+
+// Cylinder with its axis along Z, so it reads as a wheel seen from the side
+void appendCylinder(std::vector<float>& out, const glm::vec3& center, float radius, float width, const glm::vec3& color) {
+    const glm::vec3 front(0.0f, 0.0f, width * 0.5f);
+    const glm::vec3 back = -front;
+    for (int i = 0; i < static_cast<int>(wheelSegments); ++i) {
+        const float a0 = glm::two_pi<float>() * i / wheelSegments;
+        const float a1 = glm::two_pi<float>() * (i + 1) / wheelSegments;
+        const glm::vec3 r0(std::cos(a0) * radius, std::sin(a0) * radius, 0.0f);
+        const glm::vec3 r1(std::cos(a1) * radius, std::sin(a1) * radius, 0.0f);
+        pushVertex(out, center + front, color);
+        pushVertex(out, center + front + r0, color);
+        pushVertex(out, center + front + r1, color);
+        pushVertex(out, center + back, color);
+        pushVertex(out, center + back + r1, color);
+        pushVertex(out, center + back + r0, color);
+        pushVertex(out, center + front + r0, color);
+        pushVertex(out, center + back + r0, color);
+        pushVertex(out, center + back + r1, color);
+        pushVertex(out, center + front + r0, color);
+        pushVertex(out, center + back + r1, color);
+        pushVertex(out, center + front + r1, color);
+    }
+}
+
+void appendWheel(std::vector<float>& out, const glm::vec3& center, float radius, float width, const glm::vec3& tireColor) {
+    appendCylinder(out, center, radius, width, tireColor);
+    appendCylinder(out, center, radius * 0.45f, width + 0.01f, hubColor);
+}
+
+// Upper half-ring in the XY plane, sitting on the body side above a wheel
+void appendArch(std::vector<float>& out, const glm::vec3& center, float innerRadius, float outerRadius, const glm::vec3& color) {
+    for (int i = 0; i < static_cast<int>(archSegments); ++i) {
+        const float a0 = glm::pi<float>() * i / archSegments;
+        const float a1 = glm::pi<float>() * (i + 1) / archSegments;
+        const glm::vec3 in0 = center + glm::vec3(std::cos(a0) * innerRadius, std::sin(a0) * innerRadius, 0.0f);
+        const glm::vec3 in1 = center + glm::vec3(std::cos(a1) * innerRadius, std::sin(a1) * innerRadius, 0.0f);
+        const glm::vec3 out0 = center + glm::vec3(std::cos(a0) * outerRadius, std::sin(a0) * outerRadius, 0.0f);
+        const glm::vec3 out1 = center + glm::vec3(std::cos(a1) * outerRadius, std::sin(a1) * outerRadius, 0.0f);
+        pushVertex(out, in0, color);
+        pushVertex(out, out0, color);
+        pushVertex(out, out1, color);
+        pushVertex(out, in0, color);
+        pushVertex(out, out1, color);
+        pushVertex(out, in1, color);
+    }
+}
 
 }
 
-Enemy::Enemy(float x, float y, float z, const glm::vec3& bodyColor, float direction)
-    : position(x, y, z), velocity(0.0f, 0.0f, 0.0f), speed(3.0f), direction(direction), emissiveOffset(0), vertexCount(0) {
+Enemy::Enemy(float x, float y, float z, const glm::vec3& bodyColor, float direction, CarType carType)
+    : position(x, y, z), velocity(0.0f, 0.0f, 0.0f), speed(3.0f), direction(direction), carType(carType), emissiveOffset(0), vertexCount(0) {
+
+    const CarPart* parts = getCarParts(carType, bodySize);
+    lightX = bodySize.x * 0.5f + lightInset;
 
     std::vector<float> mesh;
     appendBox(mesh, glm::vec3(0.0f), bodySize, bodyColor);
-    for (const auto& part : carParts) {
-        appendBox(mesh, part.center, part.size, part.color);
+    appendBox(mesh, parts[0].center, parts[0].size, parts[0].color);
+    for (int i = 1; i < 5; ++i) {
+        const CarPart& wheel = parts[i];
+        const float side = wheel.center.z > 0.0f ? 1.0f : -1.0f;
+        appendWheel(mesh, wheel.center, wheel.size.y * 0.5f, wheel.size.z, wheel.color);
+        appendArch(mesh, glm::vec3(wheel.center.x, wheel.center.y, side * (bodySize.z * 0.5f + archInset)),
+                   archInnerRadius, archOuterRadius, archColor);
     }
     emissiveOffset = static_cast<int>(mesh.size() / 6);
-    for (const auto& part : lightParts) {
-        appendBox(mesh, part.center, part.size, part.color);
+    for (float side : {1.0f, -1.0f}) {
+        for (float lane : {0.28f, -0.28f}) {
+            appendBox(mesh, glm::vec3(side * lightX, -0.05f, lane), lightSize, side > 0.0f ? headlightColor : taillightColor);
+        }
     }
     vertexCount = static_cast<int>(mesh.size() / 6);
 
@@ -129,8 +222,11 @@ void Enemy::renderShadow(const Shader& shader, const glm::mat4& shadowProjection
 std::vector<PointLight> Enemy::getLights() const {
     const glm::mat4 model = modelMatrix();
     std::vector<PointLight> lights;
-    for (const auto& light : carLights) {
-        lights.push_back({glm::vec3(model * glm::vec4(light.center, 1.0f)), light.color});
+    for (float side : {1.0f, -1.0f}) {
+        for (float lane : {0.28f, -0.28f}) {
+            const glm::vec3 center(side * lightX, -0.05f, lane);
+            lights.push_back({glm::vec3(model * glm::vec4(center, 1.0f)), side > 0.0f ? headlightColor : taillightColor});
+        }
     }
     return lights;
 }
@@ -152,12 +248,16 @@ glm::vec3 Enemy::getPosition() const {
 }
 
 glm::vec3 Enemy::getHalfExtents() const {
-    // Body and wheels; the wheel-to-body overhang is kept out so cars in neighbouring lanes don't touch
-    return glm::vec3(0.8f, 0.3f, 0.45f);
+    // Half the body length per type; width and height are kept out of the wheels so cars in neighbouring lanes don't touch
+    return glm::vec3(bodySize.x * 0.5f, 0.3f, 0.45f);
 }
 
 void Enemy::setPosition(float x, float y, float z) {
     position.x = x;
     position.y = y;
     position.z = z;
+}
+
+CarType Enemy::getCarType() const {
+    return carType;
 }
