@@ -15,26 +15,34 @@ struct CarPart {
     glm::vec3 color;
 };
 
+// Cars are removed once they pass this X on either side
 const float exitLimit = 8.0f;
 const glm::vec3 headlightColor(1.0f, 1.0f, 0.8f);
 const glm::vec3 taillightColor(1.0f, 0.1f, 0.1f);
+// Size of each light lens (x is thickness, y and z are the lens face)
 const glm::vec3 lightSize(0.06f, 0.16f, 0.22f);
 // Distance from the body side to the centre of a light lens
 const float lightInset = 0.03f;
 // Wheels reach 0.4 below the car's origin; this lifts them onto the road surface
 const float carLift = 0.4f;
+// Number of sides on each wheel cylinder and each arch half-ring
 const float wheelSegments = 16.0f;
 const float archSegments = 8.0f;
+// Gap between the body side and the wheel arch, so the arch doesn't z-fight with the body
 const float archInset = 0.005f;
+// Radii of the wheel arch ring; the wheel itself is 0.15 in radius
 const float archInnerRadius = 0.16f;
 const float archOuterRadius = 0.23f;
 const glm::vec3 archColor(0.05f, 0.05f, 0.05f);
 const glm::vec3 hubColor(0.6f, 0.6f, 0.65f);
 
+// Cabin colour per car type; the body colour is randomised in Game::spawnCar
 const glm::vec3 normalColor(0.7f, 0.8f, 0.9f);
 const glm::vec3 sportsColor(0.9f, 0.2f, 0.2f);
 const glm::vec3 haulerColor(0.8f, 0.8f, 0.2f);
 
+// Body dimensions per car type: x is length (along the direction of travel), z is width
+// Keep width at or below 0.9 so cars stay inside their 1.0-unit lane between the lines
 const glm::vec3 normalBodySize(1.6f, 0.5f, 0.9f);
 const glm::vec3 sportsBodySize(1.8f, 0.4f, 0.8f);
 const glm::vec3 haulerBodySize(2.2f, 0.6f, 0.8f);

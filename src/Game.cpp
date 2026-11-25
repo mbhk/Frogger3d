@@ -22,46 +22,66 @@
 
 namespace {
 
+// Board layout: fields run along X (fieldCount wide, the frog starts in the middle),
+// rows run along Z (row 0 is the lower pavement, rows 1-4 are road lanes, row 5 is the goal pavement)
 const int fieldCount = 15;
 const int startField = fieldCount / 2;
 const int rowCount = 6;
 const int startRow = 0;
 const int goalRow = rowCount - 1;
+// World Z of row 0; each following row is one unit further toward -Z
 const float rowZeroZ = 2.5f;
+// Half-size of the frog's collision box, used for hit tests against cars
 const float frogHalfSize = 0.3f;
+// Camera distance from the scene and vertical field of view in degrees
 const float cameraDistance = 10.0f;
 const float cameraFovY = 45.0f;
+// HUD sizes: hudScale multiplies the font size, the others are in screen pixels
 const float hudScale = 2.0f;
 const float hudPadding = 6.0f;
 const float helpPadding = 16.0f;
 const float lineSpacing = 10.0f;
 const float statusScale = 3.0f;
+// Seconds the win and hit messages stay on screen
 const float winMessageTime = 2.0f;
 const float hitMessageTime = 1.5f;
 const int startLevel = 1;
 const int startLives = 3;
+// X where cars enter a lane; just outside the Enemy exit limit so they appear from off-screen
 const float carSpawnX = 8.5f;
+// Chance that a new car is normal or sports; the remainder are haulers (0.5 + 0.3 + 0.2 = 1)
 const float normalCarChance = 0.5f;
 const float sportsCarChance = 0.3f;
+// Minimum distance to an existing car at the entry point before a new car may spawn
 const float minSpawnGap = 2.5f;
+// A car stops when the gap to the car ahead drops below this distance
 const float followGap = 0.5f;
+// Seconds between car spawn attempts, picked at random in this range
 const float respawnMinTime = 0.3f;
 const float respawnMaxTime = 1.0f;
+// Car speed (units per second) at speed step 0, plus carSpeedPerStep for each step
 const float baseCarSpeed = 3.0f;
 const float carSpeedPerStep = 0.6f;
+// Highest speed step may exceed the lowest by at most this many steps across lanes
 const int maxSpeedStepDifference = 3;
+// Every this many levels after the first, one more car is allowed on the road at once
 const int levelsPerExtraCar = 4;
 const int startCarLimit = 1;
+// Seconds between pickup spawns, picked at random in this range
 const float pickupSpawnMinTime = 6.0f;
 const float pickupSpawnMaxTime = 12.0f;
+// Chance that a spawned pickup is a stone rather than a heart
 const float stoneSpawnChance = 0.75f;
+// Height above the ground of pickups, and seconds before an uncollected pickup disappears
 const float heartHeight = 0.25f;
 const float pickupLifetime = 20.0f;
+// Z of the stone pile that the frog delivers stones to
 const float stonePileZ = 2.75f;
 // The crossing covers crossingField, the traffic light stands on the field right of the crossing
 const int crossingField = startField + 3;
 const int buttonField = crossingField + 1;
 const float pedestrianLightZ = 2.15f;
+// HUD text colours: normal text, highlighted text, and secondary text
 const glm::vec4 textColor(1.0f, 1.0f, 1.0f, 1.0f);
 const glm::vec4 accentColor(1.0f, 0.9f, 0.3f, 1.0f);
 const glm::vec4 dimColor(0.7f, 0.7f, 0.7f, 1.0f);
